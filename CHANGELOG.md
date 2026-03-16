@@ -1,5 +1,23 @@
 # 更新日志 / Changelog
 
+## v2.9.0 (2026-03-16)
+
+### ✨ 新功能 / Features
+
+- **离线引擎（Kokoro 本地边车）**：新增 `local_kokoro` Provider，可在设置页一键下载/校验/卸载并切换在线/离线；下载链路强制 SHA256 校验并内置健康检查；安装目录固定到 `%APPDATA%/Anki-TTS-Edge/providers/kokoro/`。
+  **Offline engine (Local Kokoro sidecar)**: Added `local_kokoro` provider with one-click download/validate/uninstall and online/offline switch from Settings. Downloads are SHA256-verified with built-in healthcheck, installed under `%APPDATA%/Anki-TTS-Edge/providers/kokoro/`.
+
+- **TTSProvider 抽象层**：统一主生成入口，并在返回结构中预留 `timestamps`（离线 V1 返回空，未来可无痛补齐）。
+  **TTSProvider abstraction**: Unified the generation pipeline and reserved `timestamps` in the return structure (offline V1 returns empty; future upgrades won't require main-logic refactors).
+
+### 🔧 修复 / Fixes
+
+- **离线运行时更稳的默认下载项**：默认下载 `*-win-x64-*-MT-Release.tar.bz2` 运行时包（含可用的 `sherpa-onnx-offline-tts.exe`），并通过 manifest `version` 自动升级旧 manifest，避免卡死/缺依赖导致不可用。
+  **More reliable offline runtime default**: Default download now uses the `*-win-x64-*-MT-Release.tar.bz2` runtime bundle (includes a working `sherpa-onnx-offline-tts.exe`) and auto-upgrades older manifests by version to avoid hangs/missing-dependency failures.
+
+- **模型文件名兼容**：自动识别 `model*.onnx`（如 `model.int8.onnx`），避免解压成功但校验失败。
+  **Model filename compatibility**: Auto-detects `model*.onnx` (e.g. `model.int8.onnx`) to prevent "extracted but not found" validation failures.
+
 ## v2.8.2 (2026-03-13)
 
 ### 🔧 修复 / Fixes

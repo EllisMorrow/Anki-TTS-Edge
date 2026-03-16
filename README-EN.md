@@ -11,8 +11,10 @@ Anki-TTS-Edge is a free, high-quality voice generation tool powered by Microsoft
 
 </div>
 
-## 🔄 Latest Stabilization Update (v2.8.2)
+## 🔄 Latest Stabilization Update (v2.9.0)
 
+- Added **Offline TTS Engine (Local Kokoro sidecar)**: optional download with SHA256 verification + healthcheck, and one-click switch between online/offline.
+- Offline mode V1 notes: empty `timestamps` (no word highlighting/click-to-seek), default support for `Chinese + English`, and optional auto-fallback to online for other languages.
 - Fully stabilized the `Flet` desktop runtime and packaged EXE startup path.
 - Reworked the main interaction flows for copy-to-generate, selection single/dual voice mode, and history play/delete/clear.
 - Added a busy-state circuit breaker to the selection flow to prevent freezes and runaway CPU/memory usage during repeated selections.
@@ -30,6 +32,7 @@ Anki-TTS-Edge is a free, high-quality voice generation tool powered by Microsoft
 - **Smart Monitoring**:
   - **Copy to Generate**: Automatically generates audio from copied text and can autoplay based on settings.
   - **Selection Single/Dual Voice Mode**: (Windows) Use `GO / A / B` after text selection to choose how audio is generated.
+- **Offline TTS Engine (Optional)**: install/validate/uninstall and switch to Local Kokoro from Settings (downloaded sidecar, keeps the main app small).
 - **System Integration**:
   - **Tray Support**: Minimize to system tray to keep your workspace clean.
   - **Pin to Top**: Keep the window always on top for studying.
@@ -135,6 +138,7 @@ Upon successful build, the `dist/Anki-TTS-Edge/` directory contains the complete
 3. **Copy File**: After generation (Green -> Red dot), click the Red dot or use **Ctrl+C** to copy the audio file path (for pasting into Anki).
 4. **History**: Switch to the **History** tab to view and manage past generations.
 5. **Settings**: Customize theme (Dark/Light), behavior (Autoplay, Tray), and more in the **Settings** tab.
+   - For offline mode: switch the “TTS Engine” to Offline and click “Download & Install”. After install, click “Re-validate” to confirm.
 
 ---
 <div align="center">

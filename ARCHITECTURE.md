@@ -8,6 +8,12 @@
 - `Anki-TTS-Flet/core/audio_gen.py`
   - 使用 `edge-tts` 生成音频与词级时间戳。
   - 生成文件统一落到 `%APPDATA%/Anki-TTS-Edge/audio/`。
+- `Anki-TTS-Flet/core/tts_provider.py` / `Anki-TTS-Flet/core/tts_manager.py`
+  - TTS 抽象层与引擎选择器（`edge_online` / `local_kokoro`）。
+  - 对主链路只暴露统一的 `SynthesisRequest -> SynthesisResult`，并预留 `timestamps` 字段。
+- `Anki-TTS-Flet/core/local_engine_manager.py`
+  - 管理离线引擎（Kokoro via sherpa-onnx）的下载、SHA256 校验、安装、卸载与健康检查。
+  - 所有离线运行时与模型文件固定落到 `%APPDATA%/Anki-TTS-Edge/providers/kokoro/`（主程序 EXE 保持干净）。
 - `Anki-TTS-Flet/core/history.py`
   - 维护历史记录 JSON。
   - 历史上限不仅裁剪记录，还必须同步删除被挤出的音频与时间戳文件。
@@ -44,6 +50,12 @@
   - `logs/monitor_debug.log`
   - `audio/*.mp3`
   - `audio/*.timestamps.json`
+  - `providers/kokoro/manifest.json`（离线引擎清单，可升级）
+  - `providers/kokoro/install_state.json`（离线引擎安装状态）
+  - `providers/kokoro/runtime/**`（离线运行时解压内容）
+  - `providers/kokoro/model/**`（离线模型解压内容）
+  - `providers/kokoro/downloads/**`（离线引擎下载缓存）
+  - `providers/kokoro/cache/**`（健康检查/临时输出）
 - 音频文件名必须全局唯一。
   - 不能只用秒级时间戳，否则高频连续生成会发生覆盖。
   - 当前实现对相同 `文本 + 声音 + 速率 + 音量 + 音高` 使用稳定缓存键。
@@ -171,3 +183,10 @@
   - 日志
   - 语音缓存
   - 设置
+  - 离线引擎（providers/kokoro）
+
+## 8. 离线引擎踩坑记录
+
+- Kokoro 模型包内 ONNX 文件名可能是 `model.int8.onnx`（不保证叫 `model.onnx`），安装与校验必须做自动识别。
+- Windows 离线运行时优先下载 `*-MT-Release.tar.bz2` 这类打包（静态链接 MSVC runtime，且带齐依赖 DLL）。
+  - 单文件 `sherpa-onnx-*-tts-*.exe` 在部分环境下会卡死/不可用（疑似缺 DLL/运行库对话框阻塞），必须避免作为默认项。

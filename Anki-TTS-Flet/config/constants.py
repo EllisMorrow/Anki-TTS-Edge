@@ -116,7 +116,7 @@ HISTORY_FILE = os.path.join(DATA_DIR, "history.json")
 LOG_FILE = os.path.join(LOGS_DIR, "monitor_debug.log")
 
 # App Metadata
-APP_VERSION = "2.8.2"
+APP_VERSION = "2.9.0"
 GITHUB_URL = "https://github.com/msjsc001/Anki-TTS-Edge"
 
 # Default Configuration Values

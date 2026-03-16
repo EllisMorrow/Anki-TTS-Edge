@@ -14,6 +14,7 @@ class SettingsManager:
     def load_settings(self):
         defaults = {
             "language": "zh",
+            "tts_engine": "edge_online",
             "copy_path_enabled": True,
             "autoplay_enabled": True,
             "monitor_clipboard_enabled": False,
@@ -21,6 +22,13 @@ class SettingsManager:
             "minimize_to_tray": False,
             "dual_voice_mode_enabled": False,
             "selection_dual_mode_enabled": False,
+            "local_engine_auto_fallback": True,
+            "local_engine_download_source": "official",
+            "local_engine_preferred_variant": "kokoro_int8_multi_lang_v1_1",
+            "local_engine_install_dir": "",
+            "local_engine_ready": False,
+            "local_engine_last_healthcheck": 0,
+            "local_engine_last_error": "",
             "max_audio_files": DEFAULT_MAX_AUDIO_FILES,
             "selected_voice_left": DEFAULT_VOICE,
             "selected_voice_right": DEFAULT_VOICE,

@@ -11,15 +11,18 @@ from ui.home_view import HomeView
 from core.voices import get_cached_voices, fetch_voices_from_network
 from ui.history_view import HistoryView
 from ui.settings_view import SettingsView
-from core.audio_gen import generate_audio_task, load_timestamps
+from core.audio_gen import load_timestamps
 from core.history import history_manager
 from config.settings import settings_manager
+from core.tts_manager import TTSManager
+from core.tts_types import SynthesisRequest
 from datetime import datetime
 import os
 import pygame
 from core.files import copy_file_to_clipboard
 from core.clipboard import MonitorManager
 from core.tray import TrayIconManager
+from core.local_engine_manager import LocalEngineManager
 import logging
 import multiprocessing
 
@@ -132,6 +135,7 @@ async def main(page: ft.Page):
     home_view = HomeView(page)
     history_view = HistoryView(page)
     settings_view = SettingsView(page)
+    local_engine_manager = LocalEngineManager(settings_manager)
     
     nav_state = {"index": 0}
     nav_items = []
@@ -230,6 +234,7 @@ async def main(page: ft.Page):
         home_view.refresh_texts()
         history_view.refresh_texts()
         settings_view.refresh_texts()
+        refresh_local_engine_status_ui()
 
         refresh_navigation_styles()
         navigation_bar.update()
@@ -238,6 +243,86 @@ async def main(page: ft.Page):
     settings_view.on_language_changed = handle_language_change
     monitor_manager = None
     tray_manager = None
+
+    def refresh_local_engine_status_ui():
+        try:
+            settings_view.update_local_engine_status(settings_manager.settings, base_dir=str(local_engine_manager.base_dir))
+        except Exception as ex:
+            print(f"DEBUG: local engine status ui refresh failed: {ex}")
+
+    def handle_local_engine_open_dir():
+        try:
+            if os.name == "nt":
+                os.startfile(str(local_engine_manager.base_dir))
+        except Exception as ex:
+            show_message(f"Open engine dir failed: {ex}", True)
+
+    def handle_local_engine_manual_instructions():
+        return local_engine_manager.build_manual_download_instructions()
+
+    def handle_local_engine_install_clicked():
+        async def _task():
+            settings_view.set_local_engine_busy(True, i18n.get("local_engine_busy_installing"))
+            try:
+                result = await asyncio.to_thread(local_engine_manager.install_default)
+            except Exception as ex:
+                result = {"ok": False, "error": str(ex)}
+            finally:
+                settings_view.set_local_engine_busy(False)
+                refresh_local_engine_status_ui()
+
+            if result.get("ok"):
+                health = result.get("healthcheck") if isinstance(result, dict) else None
+                if isinstance(health, dict) and health.get("ok"):
+                    show_message("离线引擎安装完成")
+                else:
+                    show_message(f"离线引擎安装完成，但校验失败: {(health or {}).get('error') if isinstance(health, dict) else 'unknown'}", True)
+            else:
+                show_message(f"离线引擎安装失败: {result.get('error')}", True)
+
+        page.run_task(_task)
+
+    def handle_local_engine_healthcheck_clicked():
+        async def _task():
+            settings_view.set_local_engine_busy(True, i18n.get("local_engine_busy_checking"))
+            try:
+                result = await asyncio.to_thread(local_engine_manager.healthcheck)
+            except Exception as ex:
+                result = {"ok": False, "error": str(ex)}
+            finally:
+                settings_view.set_local_engine_busy(False)
+                refresh_local_engine_status_ui()
+
+            if result.get("ok"):
+                show_message("离线引擎可用")
+            else:
+                show_message(f"离线引擎不可用: {result.get('error')}", True)
+
+        page.run_task(_task)
+
+    def handle_local_engine_uninstall_clicked():
+        async def _task():
+            settings_view.set_local_engine_busy(True, i18n.get("local_engine_busy_uninstalling"))
+            try:
+                result = await asyncio.to_thread(local_engine_manager.uninstall)
+            except Exception as ex:
+                result = {"ok": False, "error": str(ex)}
+            finally:
+                settings_view.set_local_engine_busy(False)
+                refresh_local_engine_status_ui()
+
+            if result.get("ok"):
+                show_message("离线引擎已卸载")
+            else:
+                show_message(f"离线引擎卸载失败: {result.get('error')}", True)
+
+        page.run_task(_task)
+
+    settings_view.on_local_engine_install = handle_local_engine_install_clicked
+    settings_view.on_local_engine_healthcheck = handle_local_engine_healthcheck_clicked
+    settings_view.on_local_engine_uninstall = handle_local_engine_uninstall_clicked
+    settings_view.on_local_engine_manual_instructions = handle_local_engine_manual_instructions
+    settings_view.on_local_engine_open_dir = handle_local_engine_open_dir
 
     async def restore_main_window():
         page.window.minimized = False
@@ -451,6 +536,7 @@ async def main(page: ft.Page):
     playback_monitor_state = {"run_id": 0}
     clipboard_generation_state = {"text": "", "at": 0.0}
     generation_lock = asyncio.Lock()
+    tts_manager = TTSManager(settings_manager)
 
     def sync_home_controls(*controls):
         home_view._safe_update(*controls)
@@ -506,23 +592,42 @@ async def main(page: ft.Page):
         async with generation_lock:
             home_view.set_status(status_message, ft.Icons.HOURGLASS_EMPTY, ft.Colors.BLUE_100)
             try:
-                path, error, timestamps = await asyncio.wait_for(
-                    generate_audio_task(
-                        sanitized_text,
-                        selected_voice,
-                        f"{int(home_view.rate_slider.value):+d}%",
-                        f"{int(home_view.volume_slider.value):+d}%",
-                        "+0Hz",
-                    ),
-                    timeout=30.0,
+                request = SynthesisRequest(
+                    text=sanitized_text,
+                    voice=selected_voice,
+                    rate=f"{int(home_view.rate_slider.value):+d}%",
+                    volume=f"{int(home_view.volume_slider.value):+d}%",
+                    pitch="+0Hz",
+                    engine=settings_manager.get("tts_engine", "edge_online") or "edge_online",
                 )
+                timeout_s = 120.0 if request.engine == "local_kokoro" else 30.0
+                result = await asyncio.wait_for(tts_manager.synthesize(request), timeout=timeout_s)
             except asyncio.TimeoutError:
+                result = None
                 path, error, timestamps = None, i18n.get("status_timeout_error", "Generation timed out"), None
             except Exception as ex:
+                result = None
                 path, error, timestamps = None, str(ex), None
+            else:
+                if result and result.ok:
+                    path = result.audio_path
+                    timestamps = result.timestamps.to_dict() if result.timestamps else None
+                    error = None
+                    fallback_from = None
+                    try:
+                        fallback_from = (result.metadata or {}).get("fallback_from")
+                    except Exception:
+                        fallback_from = None
+                else:
+                    path = None
+                    timestamps = None
+                    error = (result.error if result else None) or "unknown_error"
+                    fallback_from = None
 
             if path:
                 apply_generated_audio_result(sanitized_text, selected_voice, path, timestamps, autoplay=autoplay)
+                if fallback_from:
+                    show_message("本地引擎不可用，已自动回退在线模式。")
             else:
                 home_view.set_status(f"生成失败: {error}", ft.Icons.ERROR_OUTLINE, ft.Colors.RED_100)
                 show_message(f"Error: {error}", True)
@@ -1167,6 +1272,12 @@ async def main(page: ft.Page):
         # Update dual mode
         is_dual = settings_manager.get("dual_voice_mode_enabled", False)
         home_view.set_dual_mode(is_dual)
+
+        if "tts_engine" in settings_dict:
+            if settings_manager.get("tts_engine") == "local_kokoro" and not settings_manager.get("local_engine_ready", False):
+                show_message("离线引擎未安装或未校验，请在设置页点击“自动下载并安装”或“重新校验”。", True)
+
+        refresh_local_engine_status_ui()
         
         page.update()
 
@@ -1185,6 +1296,7 @@ async def main(page: ft.Page):
         get_voice_for_slot("right")
     )
     settings_view.set_values(settings_manager.settings)
+    refresh_local_engine_status_ui()
     
     page.update()
 
