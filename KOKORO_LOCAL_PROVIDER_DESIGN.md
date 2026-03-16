@@ -69,9 +69,9 @@ V1 务实约束：
 
 ### Phase 5：发布与维护
 
-- [ ] 构建验证：PyInstaller onedir + 冒烟启动
-- [ ] 文档补充：使用说明（离线模式能力边界、支持语言、文件格式）
-- [ ] 发布：tag + GitHub Release（离线引擎本体不随主包发布）
+- [x] 构建验证：PyInstaller onedir + 冒烟启动
+- [x] 文档补充：使用说明（离线模式能力边界、支持语言、文件格式）
+- [x] 发布：tag + GitHub Release（离线引擎本体不随主包发布）
 
 ## 当前进度
 
@@ -80,7 +80,7 @@ V1 务实约束：
 - Phase 2：已完成（真实下载 + SHA256 校验 + 健康检查通过）
 - Phase 3：已完成（本地 Provider 可生成 WAV，timestamps 预留为空）
 - Phase 4：已完成（设置页一键切换 + 下载/校验/卸载/手动下载）
-- Phase 5：未开始
+- Phase 5：已完成（构建 + 文档 + Release）
 
 ## 实施记录（时间线）
 
@@ -90,6 +90,7 @@ V1 务实约束：
 - 2026-03-16：实现 Phase 2（`LocalEngineManager` + manifest + SHA256 校验 + 安装/卸载/健康检查）
 - 2026-03-16：发现模型文件名为 `model.int8.onnx`（非 `model.onnx`），补齐自动识别逻辑
 - 2026-03-16：发现单文件运行时 `sherpa-onnx-non-streaming-tts-x64-*.exe` 在部分 Windows 环境下会卡死/不可用，改为下载 `sherpa-onnx-*-win-x64-*-MT-Release.tar.bz2`（含可用的 `sherpa-onnx-offline-tts.exe`），并通过 manifest `version` 自动升级旧 manifest
+- 2026-03-16：完成设置页接线、打包构建与 GitHub Release（主包不内置离线引擎，运行时按需下载）
 
 ## 0. 先说结论
 
