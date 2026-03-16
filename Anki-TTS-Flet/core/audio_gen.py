@@ -77,7 +77,8 @@ async def generate_audio_with_timestamps_async(text, voice, rate, volume, pitch,
         if "No audio was received" in msg:
             msg += " (Hint: Does this voice support the text language?)"
         print(i18n.get("debug_edge_tts_fail", msg))
-        return None, None
+        # Let caller surface the actual error instead of a generic "internal error".
+        raise RuntimeError(msg) from e
 
 
 async def generate_audio_task(text, voice, rate, volume, pitch):

@@ -11,10 +11,13 @@ Anki-TTS-Edge is a free, high-quality voice generation tool powered by Microsoft
 
 </div>
 
-## 🔄 Latest Stabilization Update (v2.9.0)
+## 🔄 Latest Stabilization Update (v2.9.1)
 
 - Added **Offline TTS Engine (Local Kokoro sidecar)**: optional download with SHA256 verification + healthcheck, and one-click switch between online/offline.
 - Offline mode V1 notes: empty `timestamps` (no word highlighting/click-to-seek), default support for `Chinese + English`, and optional auto-fallback to online for other languages.
+- In offline mode, the voice list now shows the official Kokoro voice catalog (sid groups: Chinese (M/F), UK English (F), US English (F)) and includes an "Offline voice demo" link to the official preview page.
+- Engine switching now stops playback and clears the current audio state to avoid the "it still sounds offline after switching to online" confusion; it prompts you to re-generate.
+- Edge online failures are no longer swallowed: the UI surfaces more specific error messages (network/voice/service) for faster diagnosis.
 - Fully stabilized the `Flet` desktop runtime and packaged EXE startup path.
 - Reworked the main interaction flows for copy-to-generate, selection single/dual voice mode, and history play/delete/clear.
 - Added a busy-state circuit breaker to the selection flow to prevent freezes and runaway CPU/memory usage during repeated selections.
@@ -68,7 +71,7 @@ Anki-TTS-Edge is a free, high-quality voice generation tool powered by Microsoft
    ```
    *Note: If `requirements.txt` is missing, manually install:*
    ```bash
-   pip install flet==0.82.2 flet-desktop==0.82.2 edge-tts pygame pyperclip pynput pystray pillow pywin32
+   pip install flet==0.28.3 flet-desktop==0.28.3 edge-tts pygame pyperclip pynput pystray pillow pywin32
    ```
 
 3. **Run Application**
@@ -123,8 +126,8 @@ To bundle the application into a standalone Windows executable, we use PyInstall
 # Ensure PyInstaller is installed in your virtual environment
 pip install pyinstaller
 
-# Run the build command from the project root (folder mode)
-.\.venv\Scripts\python.exe -m PyInstaller Anki-TTS-Flet/main.py --name "Anki-TTS-Edge" --icon "Anki-TTS-Flet/assets/icon.ico" --add-data "Anki-TTS-Flet/assets;assets" --collect-all edge_tts --collect-all flet --collect-all flet_desktop --hidden-import=pystray --hidden-import=PIL --hidden-import=pygame --hidden-import=pynput --hidden-import=win32clipboard --hidden-import=win32con --hidden-import=flet --hidden-import=flet_desktop --noconsole --clean --noconfirm
+# Run the build command from the project root (folder mode). Prefer using the repo .spec for repeatable builds.
+.\.venv\Scripts\pyinstaller.exe -y --clean Anki-TTS-Edge.spec
 ```
 
 Upon successful build, the `dist/Anki-TTS-Edge/` directory contains the complete distributable application, with `Anki-TTS-Edge.exe` as the entry point.

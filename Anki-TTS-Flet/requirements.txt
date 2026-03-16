@@ -1,5 +1,5 @@
-flet==0.82.2
-flet-desktop==0.82.2
+flet==0.28.3
+flet-desktop==0.28.3
 edge-tts>=7.2.7
 pygame>=2.5.0
 pyperclip>=1.8.2

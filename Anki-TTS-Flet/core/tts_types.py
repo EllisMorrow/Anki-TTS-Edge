@@ -37,6 +37,9 @@ class SynthesisRequest:
     engine: str = "edge_online"
     output_path: str = ""
     language_hint: str = ""
+    # Local engines may use numeric speaker IDs (e.g. Kokoro sid).
+    # Keep voice as the Edge voice name so automatic fallback to Edge stays functional.
+    speaker_id: int | None = None
 
 
 @dataclass
@@ -47,4 +50,3 @@ class SynthesisResult:
     error: str = ""
     timestamps: TimestampsPayload | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-

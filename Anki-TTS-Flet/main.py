@@ -9,6 +9,7 @@ import time
 from config.constants import CUSTOM_WINDOW_TITLE, ICON_PATH, APP_VERSION, DEFAULT_VOICE
 from ui.home_view import HomeView
 from core.voices import get_cached_voices, fetch_voices_from_network
+from core.kokoro_voice_catalog import build_kokoro_v1_1_voice_catalog
 from ui.history_view import HistoryView
 from ui.settings_view import SettingsView
 from core.audio_gen import load_timestamps
@@ -224,6 +225,7 @@ async def main(page: ft.Page):
     # Language change handler - refresh UI text
     def handle_language_change(new_lang):
         """Refresh UI elements when language changes"""
+        nonlocal kokoro_voice_catalog
         print(f"DEBUG: Language changed to {new_lang}, refreshing UI...")
         
         for spec in tab_specs:
@@ -235,6 +237,12 @@ async def main(page: ft.Page):
         history_view.refresh_texts()
         settings_view.refresh_texts()
         refresh_local_engine_status_ui()
+
+        # Rebuild offline catalog labels and refresh voice list if currently in offline mode.
+        kokoro_voice_catalog = build_kokoro_v1_1_voice_catalog(i18n.current_language)
+        if (settings_manager.get("tts_engine", "edge_online") or "edge_online") == "local_kokoro":
+            home_view.populate_voices(kokoro_voice_catalog)
+            home_view.set_local_voice_sids(get_local_sid_for_slot("left"), get_local_sid_for_slot("right"))
 
         refresh_navigation_styles()
         navigation_bar.update()
@@ -388,11 +396,23 @@ async def main(page: ft.Page):
     pygame.mixer.init()
     
     # Show UI immediately
-    home_view.set_status("正在加载语音列表...", ft.Icons.HOURGLASS_EMPTY, ft.Colors.BLUE_100)
+    if (settings_manager.get("tts_engine", "edge_online") or "edge_online") != "local_kokoro":
+        home_view.set_status("正在加载语音列表...", ft.Icons.HOURGLASS_EMPTY, ft.Colors.BLUE_100)
     page.splash = None
     page.update()
 
-    voice_state = {"current": [], "loaded_from_cache": False}
+    edge_voice_state = {"current": [], "loaded_from_cache": False}
+    kokoro_voice_catalog = build_kokoro_v1_1_voice_catalog(i18n.current_language)
+
+    # Make sure HomeView renders the correct catalog on first load.
+    home_view.set_tts_engine(settings_manager.get("tts_engine", "edge_online") or "edge_online")
+    try:
+        home_view.set_local_voice_sids(
+            int(settings_manager.get("local_kokoro_sid_left", 0) or 0),
+            int(settings_manager.get("local_kokoro_sid_right", 0) or 0),
+        )
+    except Exception:
+        pass
 
     def voice_signature(voices):
         return tuple(v.get("name") for v in voices or [])
@@ -405,21 +425,31 @@ async def main(page: ft.Page):
             
             # Fetch fresh data
             fresh_voices = await fetch_voices_from_network()
-            current_voices = voice_state["current"]
+            current_voices = edge_voice_state["current"]
             
             # Compare with current (cache was already shown)
             if fresh_voices and voice_signature(fresh_voices) != voice_signature(current_voices):
                 print(f"DEBUG: Voice list updated in background ({len(current_voices)} -> {len(fresh_voices)})")
-                voice_state["current"] = fresh_voices
-                home_view.populate_voices(fresh_voices)
-                page.update()
+                edge_voice_state["current"] = fresh_voices
+                if (settings_manager.get("tts_engine", "edge_online") or "edge_online") == "edge_online":
+                    home_view.populate_voices(fresh_voices)
+                    page.update()
         except Exception as e:
             print(f"DEBUG: Background voice refresh failed: {e}")
 
     async def load_initial_voices():
         try:
+            engine_id = settings_manager.get("tts_engine", "edge_online") or "edge_online"
+
+            if engine_id == "local_kokoro":
+                # Offline: show Kokoro voices immediately; Edge voices can be loaded later on demand.
+                home_view.populate_voices(kokoro_voice_catalog)
+                home_view.set_status("", None, None)
+                page.update()
+                return
+
             cached_voices = get_cached_voices()
-            voice_state["loaded_from_cache"] = bool(cached_voices)
+            edge_voice_state["loaded_from_cache"] = bool(cached_voices)
 
             if cached_voices:
                 voices = cached_voices
@@ -428,12 +458,12 @@ async def main(page: ft.Page):
                 page.update()
                 voices = await fetch_voices_from_network()
 
-            voice_state["current"] = voices
+            edge_voice_state["current"] = voices
             home_view.populate_voices(voices)
             home_view.set_status("", None, None)
             page.update()
 
-            if voice_state["loaded_from_cache"]:
+            if edge_voice_state["loaded_from_cache"]:
                 asyncio.create_task(background_voice_refresh())
         except Exception as e:
             home_view.set_status(f"加载语音失败: {e}", ft.Icons.ERROR_OUTLINE, ft.Colors.RED_100)
@@ -453,6 +483,17 @@ async def main(page: ft.Page):
         if voice:
             return voice
         return DEFAULT_VOICE if fallback_to_default else None
+
+    def _parse_int(value, default=0):
+        try:
+            return int(str(value).strip())
+        except Exception:
+            return default
+
+    def get_local_sid_for_slot(slot: str) -> int:
+        key = "local_kokoro_sid_left" if slot == "left" else "local_kokoro_sid_right"
+        sid = _parse_int(settings_manager.get(key, 0), 0)
+        return max(0, sid)
     
     async def handle_satellite_action(text, mode="B"):
         if not text:
@@ -481,7 +522,7 @@ async def main(page: ft.Page):
             pass
 
         try:
-            path, _, _ = await generate_audio_for_voice(text, voice)
+            path, _, _ = await generate_audio_for_voice(text, voice, slot=voice_slot)
             try:
                 monitor_manager.sat_input_q.put(("STATE", "success" if path else "error"))
             except Exception:
@@ -578,7 +619,7 @@ async def main(page: ft.Page):
         if should_autoplay:
             handle_play_audio({"path": path, "timestamps": timestamps, "text": text})
 
-    async def generate_audio_for_voice(text, voice, status_message="正在生成音频...", autoplay=None):
+    async def generate_audio_for_voice(text, voice, slot="right", status_message="正在生成音频...", autoplay=None):
         sanitized_text = (text or "").strip()
         if not sanitized_text:
             home_view.set_status("请输入文本", ft.Icons.WARNING_AMBER, ft.Colors.ORANGE_100)
@@ -592,13 +633,16 @@ async def main(page: ft.Page):
         async with generation_lock:
             home_view.set_status(status_message, ft.Icons.HOURGLASS_EMPTY, ft.Colors.BLUE_100)
             try:
+                engine_id = settings_manager.get("tts_engine", "edge_online") or "edge_online"
+                speaker_id = get_local_sid_for_slot(slot) if engine_id == "local_kokoro" else None
                 request = SynthesisRequest(
                     text=sanitized_text,
                     voice=selected_voice,
                     rate=f"{int(home_view.rate_slider.value):+d}%",
                     volume=f"{int(home_view.volume_slider.value):+d}%",
                     pitch="+0Hz",
-                    engine=settings_manager.get("tts_engine", "edge_online") or "edge_online",
+                    engine=engine_id,
+                    speaker_id=speaker_id,
                 )
                 timeout_s = 120.0 if request.engine == "local_kokoro" else 30.0
                 result = await asyncio.wait_for(tts_manager.synthesize(request), timeout=timeout_s)
@@ -618,14 +662,33 @@ async def main(page: ft.Page):
                         fallback_from = (result.metadata or {}).get("fallback_from")
                     except Exception:
                         fallback_from = None
+
+                    history_voice_label = selected_voice
+                    if result.engine == "local_kokoro":
+                        sid_used = None
+                        try:
+                            sid_used = (result.metadata or {}).get("speaker_id")
+                        except Exception:
+                            sid_used = None
+                        if sid_used is None:
+                            sid_used = speaker_id
+                        speaker_name = ""
+                        try:
+                            speaker_name = (result.metadata or {}).get("speaker_name") or ""
+                        except Exception:
+                            speaker_name = ""
+                        history_voice_label = (
+                            f"Kokoro {speaker_name} (sid={sid_used})" if speaker_name else f"Kokoro sid={sid_used}"
+                        )
                 else:
                     path = None
                     timestamps = None
                     error = (result.error if result else None) or "unknown_error"
                     fallback_from = None
+                    history_voice_label = selected_voice
 
             if path:
-                apply_generated_audio_result(sanitized_text, selected_voice, path, timestamps, autoplay=autoplay)
+                apply_generated_audio_result(sanitized_text, history_voice_label, path, timestamps, autoplay=autoplay)
                 if fallback_from:
                     show_message("本地引擎不可用，已自动回退在线模式。")
             else:
@@ -646,7 +709,7 @@ async def main(page: ft.Page):
     def cancel_playback_monitor():
         playback_monitor_state["run_id"] += 1
 
-    async def handle_generate(e, voice):
+    async def handle_generate(e, voice, slot="right"):
         # Auto-clean HTML tags before processing
         home_view.clean_text_input()
         
@@ -656,7 +719,7 @@ async def main(page: ft.Page):
             home_view.set_status("请输入文本", ft.Icons.WARNING_AMBER, ft.Colors.ORANGE_100)
             return
 
-        await generate_audio_for_voice(text, voice)
+        await generate_audio_for_voice(text, voice, slot=slot)
 
     async def handle_generate_b(e):
         # Latest Voice (B)
@@ -664,7 +727,7 @@ async def main(page: ft.Page):
         if not v:
             show_message(i18n.get("status_no_voice_error"), True)
             return
-        await handle_generate(e, v)
+        await handle_generate(e, v, slot="right")
 
     async def handle_generate_a(e):
         # Previous Voice (A)
@@ -672,7 +735,7 @@ async def main(page: ft.Page):
         if not v:
              show_message(i18n.get("status_no_voice_error"), True)
              return
-        await handle_generate(e, v)
+        await handle_generate(e, v, slot="left")
 
     # Audio Handlers
     def handle_play_audio(e):
@@ -801,7 +864,7 @@ async def main(page: ft.Page):
         else:
             # Need to generate first
             voice = get_voice_for_slot("right")
-            await generate_audio_for_voice(text, voice, status_message="正在生成音频...", autoplay=True)
+            await generate_audio_for_voice(text, voice, slot="right", status_message="正在生成音频...", autoplay=True)
     
     def handle_replay(e):
         """Replay from beginning"""
@@ -818,7 +881,7 @@ async def main(page: ft.Page):
                  home_view.set_status("请选择声音", ft.Icons.WARNING_AMBER, ft.Colors.ORANGE_100)
                  return False
                  
-             await handle_generate(e, v)
+             await handle_generate(e, v, slot="right")
              
              # After generation, handle_generate starts playback from 0. 
              # We might intercept or just let it be, but we need timestamps now.
@@ -826,12 +889,40 @@ async def main(page: ft.Page):
                  return False
         return True
 
+    def seek_playback_ms(target_ms: int) -> bool:
+        """Best-effort seek for pygame.mixer.music across formats/builds."""
+        path = current_audio_state.get("path")
+        if not path or not os.path.exists(path):
+            return False
+
+        # Try pygame's play(start=...) first.
+        try:
+            pygame.mixer.music.play(start=target_ms / 1000.0)
+            return True
+        except Exception as ex:
+            print(f"DEBUG: seek via play(start) failed: {ex}")
+
+        # Fallback: reload + set_pos() (supported for MP3/OGG in many builds).
+        try:
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+        try:
+            pygame.mixer.music.load(path)
+            pygame.mixer.music.play()
+            pygame.mixer.music.set_pos(target_ms / 1000.0)
+            return True
+        except Exception as ex:
+            print(f"DEBUG: seek via set_pos failed: {ex}")
+            return False
+
     async def handle_prev_sentence(e):
         """Jump to previous sentence"""
         if not await ensure_audio_ready(e): return
 
         timestamps = current_audio_state.get("timestamps")
         if not timestamps or not timestamps.get("sentences"):
+            show_message("当前音频缺少时间戳，无法跳句/点读（离线模式暂不支持）。", True)
             return
         
         sentences = timestamps["sentences"]
@@ -848,8 +939,9 @@ async def main(page: ft.Page):
         current_audio_state["stop_playback_at_ms"] = stop_ms 
             
         try:
-            # FIX: Always use play(start=) to reset get_pos() for consistent timing offset
-            pygame.mixer.music.play(start=target_ms / 1000.0)
+            if not seek_playback_ms(target_ms):
+                show_message("跳转播放失败（seek 不支持/失败）。", True)
+                return
             
             home_view.btn_play_pause.selected = True
             sync_home_controls(home_view.btn_play_pause)
@@ -879,6 +971,7 @@ async def main(page: ft.Page):
         
         timestamps = current_audio_state.get("timestamps")
         if not timestamps or not timestamps.get("sentences"):
+            show_message("当前音频缺少时间戳，无法跳句/点读（离线模式暂不支持）。", True)
             return
         
         sentences = timestamps["sentences"]
@@ -896,8 +989,9 @@ async def main(page: ft.Page):
             current_audio_state["stop_playback_at_ms"] = stop_ms 
             
             try:
-                # FIX: Always use play(start=) to reset get_pos()
-                pygame.mixer.music.play(start=target_ms / 1000.0)
+                if not seek_playback_ms(target_ms):
+                    show_message("跳转播放失败（seek 不支持/失败）。", True)
+                    return
 
                 home_view.btn_play_pause.selected = True
                 sync_home_controls(home_view.btn_play_pause)
@@ -923,7 +1017,9 @@ async def main(page: ft.Page):
     def handle_word_jump(word_index):
         """Click to Play: Jump to the exact clicked word position"""
         timestamps = current_audio_state.get("timestamps")
-        if not timestamps or not timestamps.get("words"): return
+        if not timestamps or not timestamps.get("words"):
+            show_message("当前音频缺少时间戳，无法点读（离线模式暂不支持）。", True)
+            return
         
         if word_index < 0 or word_index >= len(timestamps["words"]): return
         target_word = timestamps["words"][word_index]
@@ -941,7 +1037,9 @@ async def main(page: ft.Page):
         current_audio_state["stop_playback_at_ms"] = None
         
         try:
-            pygame.mixer.music.play(start=word_ms / 1000.0)
+            if not seek_playback_ms(word_ms):
+                show_message("点读跳转失败（seek 不支持/失败）。", True)
+                return
             
             current_audio_state["is_paused"] = False
             home_view.btn_play_pause.selected = True
@@ -1055,27 +1153,69 @@ async def main(page: ft.Page):
         payload = e.control.data if isinstance(e.control.data, dict) else {"name": e.control.data, "side": "right"}
         new_voice = payload.get("name")
         voice_side = payload.get("side") or "right"
+        engine_id = settings_manager.get("tts_engine", "edge_online") or "edge_online"
+
+        if engine_id == "local_kokoro":
+            sid = payload.get("sid")
+            try:
+                sid_int = int(sid) if sid is not None else None
+            except Exception:
+                sid_int = None
+            if sid_int is None:
+                return
+
+            key = "local_kokoro_sid_left" if voice_side == "left" else "local_kokoro_sid_right"
+            current_sid = get_local_sid_for_slot(voice_side)
+            if sid_int == current_sid:
+                print(f"Selected same Kokoro sid on {voice_side}, no change.")
+                return
+
+            settings_manager.set(key, sid_int)
+            settings_manager.save_settings()
+            print(f"Kokoro sid slot updated: {voice_side}={sid_int}")
+            home_view.set_local_voice_sids(get_local_sid_for_slot("left"), get_local_sid_for_slot("right"))
+            page.update()
+            return
+
         key = "selected_voice_left" if voice_side == "left" else "selected_voice_right"
-        current_voice = settings_manager.get(key)
+        current_voice = (settings_manager.get(key) or "").strip()
 
         if not new_voice:
             return
+        new_voice = str(new_voice).strip()
         if new_voice == current_voice:
             print(f"Selected same voice on {voice_side}, no change.")
             return
 
         settings_manager.set(key, new_voice)
         settings_manager.save_settings()
-        
+
         print(f"Voice Slot Updated: {voice_side}='{new_voice}'")
 
-        home_view.set_selections(
-            get_voice_for_slot("left"),
-            get_voice_for_slot("right")
-        )
+        home_view.set_selections(get_voice_for_slot("left"), get_voice_for_slot("right"))
         page.update()
 
     home_view.on_voice_selected = handle_voice_selected
+
+    def handle_local_sid_changed(side: str, raw_value: str):
+        raw = str(raw_value or "").strip()
+        if not raw:
+            return
+        if not raw.isdigit():
+            return
+
+        sid = _parse_int(raw, 0)
+        sid = max(0, sid)
+        key = "local_kokoro_sid_left" if side == "left" else "local_kokoro_sid_right"
+        if sid == get_local_sid_for_slot(side):
+            return
+
+        settings_manager.set(key, sid)
+        settings_manager.save_settings()
+        home_view.set_local_voice_sids(get_local_sid_for_slot("left"), get_local_sid_for_slot("right"))
+        page.update()
+
+    home_view.on_local_sid_changed = handle_local_sid_changed
 
     # Pin Toggle Handler (Always on Top) with persistence
     def handle_pin_toggle(is_pinned):
@@ -1186,7 +1326,7 @@ async def main(page: ft.Page):
             clipboard_generation_state["text"] = text
             clipboard_generation_state["at"] = now
             voice = get_voice_for_slot("right")
-            await generate_audio_for_voice(text, voice, status_message="正在根据复制内容生成音频...")
+            await generate_audio_for_voice(text, voice, slot="right", status_message="正在根据复制内容生成音频...")
 
         page.run_task(_runner)
 
@@ -1252,6 +1392,7 @@ async def main(page: ft.Page):
     
     # Settings Handler
     def handle_save_settings(settings_dict):
+        old_engine = settings_manager.get("tts_engine", "edge_online") or "edge_online"
         print("DEBUG: Saving Settings:", settings_dict)
         for k, v in settings_dict.items():
             settings_manager.set(k, v)
@@ -1274,8 +1415,60 @@ async def main(page: ft.Page):
         home_view.set_dual_mode(is_dual)
 
         if "tts_engine" in settings_dict:
-            if settings_manager.get("tts_engine") == "local_kokoro" and not settings_manager.get("local_engine_ready", False):
+            new_engine = settings_manager.get("tts_engine", "edge_online") or "edge_online"
+
+            # Engine switch should stop playback and clear current audio cache,
+            # otherwise users may mistake the last-generated audio as "still using the old engine".
+            if old_engine != new_engine:
+                try:
+                    pygame.mixer.music.stop()
+                except Exception:
+                    pass
+                try:
+                    pygame.mixer.music.unload()
+                except Exception:
+                    pass
+                cancel_playback_monitor()
+                current_audio_state.update(
+                    {
+                        "path": None,
+                        "timestamps": None,
+                        "text": None,
+                        "is_playing": False,
+                        "is_paused": False,
+                        "current_sentence_index": 0,
+                        "current_word_index": 0,
+                        "text_dirty": True,
+                        "current_playback_start_ms": 0,
+                        "stop_playback_at_ms": None,
+                    }
+                )
+                try:
+                    home_view.hide_highlighted_text()
+                except Exception:
+                    pass
+                home_view.btn_play_pause.selected = False
+                home_view.text_input.read_only = False
+                sync_home_controls(home_view.btn_play_pause, home_view.text_input)
+                home_view.set_status("引擎已切换，请重新生成音频。", ft.Icons.INFO_OUTLINE, ft.Colors.BLUE_100)
+
+            home_view.set_tts_engine(new_engine)
+
+            if new_engine == "local_kokoro":
+                home_view.populate_voices(kokoro_voice_catalog)
+                home_view.set_local_voice_sids(get_local_sid_for_slot("left"), get_local_sid_for_slot("right"))
+            else:
+                # Switch back to Edge voices.
+                if edge_voice_state.get("current"):
+                    home_view.populate_voices(edge_voice_state["current"])
+                else:
+                    page.run_task(load_initial_voices)
+                home_view.set_selections(get_voice_for_slot("left"), get_voice_for_slot("right"))
+
+            if new_engine == "local_kokoro" and not settings_manager.get("local_engine_ready", False):
                 show_message("离线引擎未安装或未校验，请在设置页点击“自动下载并安装”或“重新校验”。", True)
+            if new_engine == "edge_online" and not (edge_voice_state.get("current") or []):
+                page.run_task(load_initial_voices)
 
         refresh_local_engine_status_ui()
         
@@ -1291,6 +1484,8 @@ async def main(page: ft.Page):
     # Init Views state
     is_dual = settings_manager.get("dual_voice_mode_enabled", False)
     home_view.set_dual_mode(is_dual)
+    home_view.set_tts_engine(settings_manager.get("tts_engine", "edge_online") or "edge_online")
+    home_view.set_local_voice_sids(get_local_sid_for_slot("left"), get_local_sid_for_slot("right"))
     home_view.set_selections(
         get_voice_for_slot("left"),
         get_voice_for_slot("right")

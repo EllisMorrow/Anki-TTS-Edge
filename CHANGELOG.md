@@ -1,5 +1,21 @@
 # 更新日志 / Changelog
 
+## v2.9.1 (2026-03-16)
+
+### 🔧 修复 / Fixes
+
+- **离线音色列表改为官方 Kokoro v1.1 目录**：离线模式下声音列表不再显示微软 voice，而是按“美式女声 / 英式女声 / 中文女声 / 中文男声”分组展示 Kokoro sid，并新增“离线语音音效听”外链入口。
+  **Offline voice catalog now matches official Kokoro v1.1**: Offline mode no longer shows Microsoft voices. It groups Kokoro sid voices by US/UK English female and Chinese female/male, and adds an external “offline voice demos” link.
+
+- **修复引擎切换后仍播放旧音频造成误判**：切换在线/离线时会停止播放、清空当前音频状态并提示重新生成，避免“选了在线但像本地在读”的错觉。
+  **Fix stale playback after engine switch**: Switching engines now stops playback and clears current audio state to avoid confusing stale audio with the new engine.
+
+- **点读/跳句在离线模式给出明确提示**：离线引擎 V1 不产出时间戳，点读与跳句会提示“不支持”，在线模式则增加 seek 兼容 fallback，降低跳转失败概率。
+  **Point-read / sentence jump now behaves predictably**: Offline V1 has no timestamps so point-read/jump shows a clear “not supported” message. Online mode adds a seek fallback to reduce jump failures.
+
+- **Edge 失败错误更可诊断**：在线生成失败不再只显示 `debug_edge_tts_internal_error`，而是透传真实异常信息，便于定位 voice/网络问题。
+  **More diagnosable Edge failures**: Online errors now propagate the real exception instead of a generic `debug_edge_tts_internal_error`.
+
 ## v2.9.0 (2026-03-16)
 
 ### ✨ 新功能 / Features

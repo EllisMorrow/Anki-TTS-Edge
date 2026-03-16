@@ -8,6 +8,7 @@ from pathlib import Path
 
 from config.constants import AUDIO_DIR
 from core.local_engine_manager import LocalEngineManager
+from core.kokoro_voice_catalog import kokoro_v1_1_sid_to_name
 from core.tts_provider import TTSProvider
 from core.tts_types import SynthesisRequest, SynthesisResult, TimestampsPayload
 from utils.text import sanitize_text
@@ -68,20 +69,26 @@ class LocalKokoroProvider(TTSProvider):
         model_dir = Path(validation["model_dir"])
         model_onnx = Path(validation.get("model_onnx") or (model_dir / "model.onnx"))
 
-        # V1: use a single speaker id by default. Future: map local voice selection to sid.
         sid = 0
+        try:
+            if request.speaker_id is not None:
+                sid = int(request.speaker_id)
+        except Exception:
+            sid = 0
+        sid = max(0, sid)
 
         out_path = request.output_path or self._build_output_path(request, sid)
         out_file = Path(out_path)
         out_file.parent.mkdir(parents=True, exist_ok=True)
 
         if out_file.exists() and out_file.stat().st_size > 1024:
+            speaker_name = kokoro_v1_1_sid_to_name(sid) or ""
             return SynthesisResult(
                 ok=True,
                 engine=self.provider_id,
                 audio_path=str(out_file),
                 timestamps=TimestampsPayload(text=text, words=[], sentences=[], source="local_kokoro:none"),
-                metadata={"cache_hit": True},
+                metadata={"cache_hit": True, "speaker_id": sid, "speaker_name": speaker_name},
             )
 
         cmd = [
@@ -120,14 +127,21 @@ class LocalKokoroProvider(TTSProvider):
 
         if proc.returncode != 0:
             err = (proc.stderr or proc.stdout or "").strip()[:2000]
-            return SynthesisResult(ok=False, engine=self.provider_id, error=f"kokoro_failed:{proc.returncode}", metadata={"stderr": err})
+            return SynthesisResult(
+                ok=False,
+                engine=self.provider_id,
+                error=f"kokoro_failed:{proc.returncode}",
+                metadata={"stderr": err, "speaker_id": sid, "speaker_name": kokoro_v1_1_sid_to_name(sid) or ""},
+            )
 
         if not out_file.exists() or out_file.stat().st_size < 1024:
-            return SynthesisResult(ok=False, engine=self.provider_id, error="kokoro_no_output")
+            return SynthesisResult(ok=False, engine=self.provider_id, error="kokoro_no_output", metadata={"speaker_id": sid})
 
+        speaker_name = kokoro_v1_1_sid_to_name(sid) or ""
         return SynthesisResult(
             ok=True,
             engine=self.provider_id,
             audio_path=str(out_file),
             timestamps=TimestampsPayload(text=text, words=[], sentences=[], source="local_kokoro:none"),
+            metadata={"speaker_id": sid, "speaker_name": speaker_name},
         )

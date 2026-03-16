@@ -29,6 +29,9 @@ class SettingsManager:
             "local_engine_ready": False,
             "local_engine_last_healthcheck": 0,
             "local_engine_last_error": "",
+            # Local Kokoro speaker IDs (sid). Keep them separate from Edge voice selection.
+            "local_kokoro_sid_left": 0,
+            "local_kokoro_sid_right": 0,
             "max_audio_files": DEFAULT_MAX_AUDIO_FILES,
             "selected_voice_left": DEFAULT_VOICE,
             "selected_voice_right": DEFAULT_VOICE,

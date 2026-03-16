@@ -11,10 +11,13 @@ Anki-TTS-Edge 是一个基于微软 Edge TTS 技术的免费、高质量语音�
 
 </div>
 
-## 🔄 最新稳定化更新（v2.9.0）
+## 🔄 最新稳定化更新（v2.9.1）
 
 - 新增**离线语音引擎（Kokoro 本地边车）**：可选下载，带 SHA256 校验与健康检查，并支持在线/离线一键切换。
 - 离线模式 V1 说明：`timestamps` 为空（不支持逐词高亮/点击跳播），默认仅承诺 `中文 + 英文`，其他语言可按设置自动回退在线。
+- 离线模式下的“声音列表”改为 Kokoro 官方音色目录（sid 分组：中(男/女)、英(女)、美(女)），并提供“离线语音音效听”跳转到官方试听页。
+- 引擎切换时会停止播放并清空当前音频状态，避免“切在线但还在播离线旧音频”的错觉；切换后提示需重新生成。
+- Edge 在线生成失败时不再吞掉错误，界面会显示更具体的失败原因（便于定位网络/voice/服务端问题）。
 - 完整修复 `Flet` 桌面运行时与打包兼容问题，EXE 启动链已稳定。
 - 重构复制生成、划词单/双语音、历史播放/删除/清空的主交互链路。
 - 划词流程加入忙时断路器，避免反复划词造成卡死和高占用。
@@ -68,7 +71,7 @@ Anki-TTS-Edge 是一个基于微软 Edge TTS 技术的免费、高质量语音�
    ```
    *注意：如果尚未生成 requirements.txt，可手动安装核心依赖：*
    ```bash
-   pip install flet==0.82.2 flet-desktop==0.82.2 edge-tts pygame pyperclip pynput pystray pillow pywin32
+   pip install flet==0.28.3 flet-desktop==0.28.3 edge-tts pygame pyperclip pynput pystray pillow pywin32
    ```
 
 3. **运行程序**
@@ -123,8 +126,8 @@ Anki-TTS-Edge/
 # 请确保在虚拟环境中安装了 pyinstaller
 pip install pyinstaller
 
-# 根目录执行以下打包命令（文件夹模式）
-.\.venv\Scripts\python.exe -m PyInstaller Anki-TTS-Flet/main.py --name "Anki-TTS-Edge" --icon "Anki-TTS-Flet/assets/icon.ico" --add-data "Anki-TTS-Flet/assets;assets" --collect-all edge_tts --collect-all flet --collect-all flet_desktop --hidden-import=pystray --hidden-import=PIL --hidden-import=pygame --hidden-import=pynput --hidden-import=win32clipboard --hidden-import=win32con --hidden-import=flet --hidden-import=flet_desktop --noconsole --clean --noconfirm
+# 根目录执行以下打包命令（文件夹模式，推荐使用仓库内的 .spec）
+.\.venv\Scripts\pyinstaller.exe -y --clean Anki-TTS-Edge.spec
 ```
 
 构建完成后，`dist/Anki-TTS-Edge/` 目录即为完整的可发布程序，其中 `Anki-TTS-Edge.exe` 为入口文件。

@@ -1,5 +1,6 @@
 import flet as ft
 from utils.i18n import i18n
+from core.kokoro_voice_catalog import KOKORO_MULTI_LANG_V1_1_DOC_URL
 
 MAX_HIGHLIGHT_WORDS = 320
 
@@ -93,6 +94,38 @@ class HomeView(ft.Container):
             on_event=lambda e: self._on_filter_change('right'),
             expand=True,
             dense=True
+        )
+
+        # 2.6 Offline (Local) Voice Selection (speaker id / sid)
+        self._tts_engine_id = "edge_online"
+        self._local_sid_left = 0
+        self._local_sid_right = 0
+        self.offline_hint_text = ft.Text(i18n.get("offline_voice_hint"), size=12)
+        self.offline_hint_container = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.INFO_OUTLINE, size=14),
+                    self.offline_hint_text,
+                ],
+                spacing=6,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            visible=False,
+            bgcolor="primaryContainer",
+            border_radius=8,
+            padding=ft.padding.symmetric(horizontal=10, vertical=6),
+        )
+
+        self.offline_demo_button = ft.TextButton(
+            text=i18n.get("offline_voice_demo_link", "离线语音音效听"),
+            icon=ft.Icons.OPEN_IN_NEW,
+            style=ft.ButtonStyle(padding=ft.padding.all(0)),
+            on_click=self._open_offline_demo,
+        )
+        self.offline_demo_container = ft.Container(
+            content=ft.Row([self.offline_demo_button], spacing=6),
+            visible=False,
+            padding=ft.padding.only(left=2),
         )
         
         # 3. Voice Lists (Dual Column)
@@ -283,6 +316,25 @@ class HomeView(ft.Container):
         # Store references for expand/collapse
         self.list_container_left = list_container_left
         self.list_container_right = list_container_right
+
+        # Filters row (online only)
+        self.filters_row = ft.Row([self.lang_dropdown_left, self.lang_dropdown_right], spacing=20)
+
+        # Voice selection areas (online + offline)
+        self.voice_row_online = ft.Row(
+            [list_container_left, list_container_right],
+            expand=True,
+            spacing=20,
+        )
+        self.voice_area = ft.Column(
+            [
+                self.offline_hint_container,
+                self.offline_demo_container,
+                self.voice_row_online,
+            ],
+            spacing=10,
+            expand=True,
+        )
         
         self.content = ft.Column(
             expand=True,
@@ -293,15 +345,11 @@ class HomeView(ft.Container):
                 ft.Divider(height=10, color="transparent"),
                 
                 # Filters
-                ft.Row([self.lang_dropdown_left, self.lang_dropdown_right], spacing=20),
+                self.filters_row,
                 ft.Divider(height=10, color="transparent"),
 
                 # Voice Selection Area
-                ft.Row(
-                    [list_container_left, list_container_right],
-                    expand=True,
-                    spacing=20,
-                ),
+                self.voice_area,
                 
                 ft.Divider(height=10, color="transparent"),
                 
@@ -419,6 +467,30 @@ class HomeView(ft.Container):
         )
 
     # --- Methods to Populate Data (To be called by Controller) ---
+    def set_tts_engine(self, engine_id: str):
+        engine_id = (engine_id or "edge_online").strip() or "edge_online"
+        self._tts_engine_id = engine_id
+        is_offline = engine_id == "local_kokoro"
+
+        self.filters_row.visible = not is_offline
+        self.offline_hint_container.visible = is_offline
+        self.offline_demo_container.visible = is_offline
+        self._safe_update(self.filters_row, self.offline_hint_container, self.offline_demo_container, self.voice_area)
+
+    def set_local_voice_sids(self, left_sid: int, right_sid: int):
+        try:
+            self._local_sid_left = int(left_sid) if left_sid is not None else 0
+        except Exception:
+            self._local_sid_left = 0
+        try:
+            self._local_sid_right = int(right_sid) if right_sid is not None else 0
+        except Exception:
+            self._local_sid_right = 0
+
+        # Refresh selection badges when offline voices are shown.
+        if self._tts_engine_id == "local_kokoro" and hasattr(self, "all_voices_data"):
+            self._render_voices(self.all_voices_data, side="both")
+
     def set_dual_mode(self, enabled):
         self.dual_mode = enabled
         if enabled:
@@ -476,9 +548,14 @@ class HomeView(ft.Container):
         def filter_list(full_list, lang_filter):
             if not lang_filter: return full_list
             return [v for v in full_list if v["lang"] == lang_filter]
-            
-        left_voices = filter_list(voice_list, self.lang_dropdown_left.value)
-        right_voices = filter_list(voice_list, self.lang_dropdown_right.value)
+
+        # Offline Kokoro voices should be selectable on BOTH lists, independent of the language filters.
+        if getattr(self, "_tts_engine_id", "edge_online") == "local_kokoro":
+            left_voices = voice_list
+            right_voices = voice_list
+        else:
+            left_voices = filter_list(voice_list, self.lang_dropdown_left.value)
+            right_voices = filter_list(voice_list, self.lang_dropdown_right.value)
         
         def create_tiles(target_list, nav_row, data_source, list_ref, region_positions, list_side):
             target_list.controls.clear()
@@ -540,8 +617,22 @@ class HomeView(ft.Container):
                 display_name = item.get("display_name") or name
 
                 # Selection status
-                is_right = hasattr(self, 'selected_voice_right') and name == self.selected_voice_right
-                is_left = hasattr(self, 'selected_voice_left') and hasattr(self, 'dual_mode') and self.dual_mode and name == self.selected_voice_left
+                sid = item.get("sid") if isinstance(item, dict) else None
+                if sid is not None:
+                    try:
+                        sid_int = int(sid)
+                    except Exception:
+                        sid_int = None
+                    is_right = sid_int is not None and sid_int == getattr(self, "_local_sid_right", None)
+                    is_left = (
+                        sid_int is not None
+                        and hasattr(self, "dual_mode")
+                        and self.dual_mode
+                        and sid_int == getattr(self, "_local_sid_left", None)
+                    )
+                else:
+                    is_right = hasattr(self, 'selected_voice_right') and name == self.selected_voice_right
+                    is_left = hasattr(self, 'selected_voice_left') and hasattr(self, 'dual_mode') and self.dual_mode and name == self.selected_voice_left
                 
                 trailing_content = None
                 bg = "surfaceVariant"
@@ -575,7 +666,12 @@ class HomeView(ft.Container):
                     title=ft.Text(display_name, size=14, weight="w500"),
                     trailing=trailing_content,
                     dense=True,
-                    data={"name": name, "side": list_side},
+                    data={
+                        "name": name,
+                        "side": list_side,
+                        "sid": item.get("sid") if isinstance(item, dict) else None,
+                        "engine": item.get("engine") if isinstance(item, dict) else None,
+                    },
                     on_click=self._on_voice_selected,
                     shape=ft.RoundedRectangleBorder(radius=8),
                     hover_color=ft.Colors.with_opacity(0.1, "primary"),
@@ -845,10 +941,20 @@ class HomeView(ft.Container):
         if hasattr(self, 'on_pin_toggle'):
             self.on_pin_toggle(is_pinned)
 
+    def _open_offline_demo(self, e):
+        try:
+            import webbrowser
+
+            webbrowser.open(KOKORO_MULTI_LANG_V1_1_DOC_URL)
+        except Exception as ex:
+            print(f"DEBUG: open offline demo failed: {ex}")
+
     def refresh_texts(self):
         self.input_label_text.value = i18n.get("input_text_label")
         self.header_left.value = i18n.get("voice_list_label_1")
         self.header_right.value = i18n.get("voice_list_label_2")
+        self.offline_hint_text.value = i18n.get("offline_voice_hint")
+        self.offline_demo_button.text = i18n.get("offline_voice_demo_link", "离线语音音效听")
         self.rate_label_text.value = i18n.get("rate_label")
         self.volume_label_text.value = i18n.get("volume_label")
         self.btn_gen_a.text = i18n.get("generate_button_previous")

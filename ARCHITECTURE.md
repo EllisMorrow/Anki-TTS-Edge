@@ -74,6 +74,10 @@
 - 声音选择状态使用稳定槽位：
   - `selected_voice_left`
   - `selected_voice_right`
+- 离线 Kokoro 音色选择使用独立槽位（与微软 voice 解耦）：
+  - `local_kokoro_sid_left`
+  - `local_kokoro_sid_right`
+  - 音色目录由 `Anki-TTS-Flet/core/kokoro_voice_catalog.py` 固化（按官方 sid->name 映射，避免“顺推生成”导致错配）。
 - 兼容迁移：
   - 旧版 `selected_voice_previous -> selected_voice_left`
   - 旧版 `selected_voice_latest -> selected_voice_right`
@@ -101,6 +105,11 @@
 - 首页 / 划词双语音映射固定为：
   - `A -> selected_voice_left`
   - `B -> selected_voice_right`
+- 引擎切换必须清空播放状态：
+  - 停止并卸载当前音频，清空 `current_audio_state.path/timestamps`，避免“切到在线但仍播放离线旧音频”造成误判。
+- 点读/跳句依赖时间戳：
+  - 在线（Edge）生成 `words/sentences` 时间戳后才启用。
+  - 离线（Kokoro v1）当前不产出时间戳，相关操作应明确提示“不支持”（而不是静默无响应）。
 - 监听线程不能直接操作 Flet UI。
   - 必须通过 `page.run_task(...)` 回到主页面事件循环后再更新控件。
 - 后台链路不能假定 `HomeView` 当前已挂载。
