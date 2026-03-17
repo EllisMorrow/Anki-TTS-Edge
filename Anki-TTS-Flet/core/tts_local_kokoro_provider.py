@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import logging
 import os
 import subprocess
+import threading
 from pathlib import Path
 
 from config.constants import AUDIO_DIR
@@ -12,6 +15,8 @@ from core.kokoro_voice_catalog import kokoro_v1_1_sid_to_name
 from core.tts_provider import TTSProvider
 from core.tts_types import SynthesisRequest, SynthesisResult, TimestampsPayload
 from utils.text import sanitize_text
+
+logger = logging.getLogger(__name__)
 
 
 def _guess_language(text: str) -> str:
@@ -27,6 +32,30 @@ class LocalKokoroProvider(TTSProvider):
     def __init__(self, settings_manager):
         self._settings = settings_manager
         self._engine = LocalEngineManager(settings_manager)
+        self._active_proc = None
+        self._active_proc_lock = threading.Lock()
+
+    async def cancel_active(self, reason: str = "shutdown", wait_timeout_s: float = 2.0) -> bool:
+        """Best-effort kill for the currently running Kokoro child process (if any)."""
+        proc = None
+        with self._active_proc_lock:
+            proc = self._active_proc
+
+        if not proc or getattr(proc, "returncode", None) is not None:
+            return False
+
+        try:
+            proc.kill()
+        except Exception:
+            return False
+
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=wait_timeout_s)
+        except Exception:
+            pass
+
+        logger.info("Killed active Kokoro process due to %s", reason)
+        return True
 
     def is_ready(self) -> bool:
         return bool(self._engine.validate_installation().get("ok", False))
@@ -110,28 +139,85 @@ class LocalKokoroProvider(TTSProvider):
         cmd.append(f"--sid={sid}")
         cmd.append(text)
 
+        proc = None
         try:
-            proc = subprocess.run(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=120,
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 cwd=str(self._engine.base_dir),
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             )
+            with self._active_proc_lock:
+                self._active_proc = proc
+
+            try:
+                stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=120.0)
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                try:
+                    await proc.wait()
+                except Exception:
+                    pass
+                return SynthesisResult(
+                    ok=False,
+                    engine=self.provider_id,
+                    error="kokoro_timeout",
+                    metadata={"speaker_id": sid, "speaker_name": kokoro_v1_1_sid_to_name(sid) or ""},
+                )
+            except asyncio.CancelledError:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                try:
+                    await proc.wait()
+                except Exception:
+                    pass
+                return SynthesisResult(
+                    ok=False,
+                    engine=self.provider_id,
+                    error="kokoro_cancelled",
+                    metadata={"speaker_id": sid, "speaker_name": kokoro_v1_1_sid_to_name(sid) or ""},
+                )
         except Exception as ex:
             return SynthesisResult(ok=False, engine=self.provider_id, error=str(ex))
+        finally:
+            with self._active_proc_lock:
+                if self._active_proc is proc:
+                    self._active_proc = None
 
-        if proc.returncode != 0:
-            err = (proc.stderr or proc.stdout or "").strip()[:2000]
+        rc = getattr(proc, "returncode", None)
+        if rc != 0:
+            try:
+                stdout = (stdout_b or b"").decode("utf-8", errors="replace")
+            except Exception:
+                stdout = ""
+            try:
+                stderr = (stderr_b or b"").decode("utf-8", errors="replace")
+            except Exception:
+                stderr = ""
+
+            stdout_snip = (stdout or "").strip()[:2000]
+            stderr_snip = (stderr or "").strip()[:2000]
+            if stderr_snip:
+                logger.warning("Kokoro failed rc=%s stderr=%s", rc, stderr_snip[:300])
+            elif stdout_snip:
+                logger.warning("Kokoro failed rc=%s stdout=%s", rc, stdout_snip[:300])
+
             return SynthesisResult(
                 ok=False,
                 engine=self.provider_id,
-                error=f"kokoro_failed:{proc.returncode}",
-                metadata={"stderr": err, "speaker_id": sid, "speaker_name": kokoro_v1_1_sid_to_name(sid) or ""},
+                error=f"kokoro_failed:{rc}",
+                metadata={
+                    "stdout": stdout_snip,
+                    "stderr": stderr_snip,
+                    "speaker_id": sid,
+                    "speaker_name": kokoro_v1_1_sid_to_name(sid) or "",
+                },
             )
 
         if not out_file.exists() or out_file.stat().st_size < 1024:

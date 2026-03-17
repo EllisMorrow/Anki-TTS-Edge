@@ -33,9 +33,17 @@
   - `path`
   - `timestamps`
   - `text`
+  - `engine_id` / `slot` / `voice` / `speaker_id`
+  - `rate` / `volume` / `pitch`
+  - `audio_text` / `full_text` / `click_tokens`
   - `current_sentence_index`
   - `current_playback_start_ms`
   - `stop_playback_at_ms`
+- “从缓存播放/朗读”必须校验音频身份（Audio Identity），不能只用“文本是否变脏”判断：
+  - 引擎 (`edge_online` / `local_kokoro`)
+  - 声音/音色（Edge voice 或 Kokoro sid）
+  - 语速/音量/音高
+  - 文本
 - 播放监控协程必须保持单实例。
   - 新播放开始时提升 `run_id`，旧监控循环自动失效退出。
   - 暂停/恢复不能重复启动监控循环。
@@ -138,6 +146,12 @@
   - 卫星窗已显示但用户尚未点击时，忽略新的划词触发。
   - 划词生成进行中时，忽略新的划词触发。
   - 卫星窗自动隐藏或关闭时，必须显式清除忙状态。
+- 离线点读（`local_kokoro`）的实现约束：
+  - 离线 V1 不产出真实时间戳，无法做可靠的毫秒级 seek。
+  - 播放时展示可点击文本覆盖层（基于轻量 tokenization：中文按字，英文/数字按连续 alnum 分组）。
+  - 点击某字/词会停止当前播放并重新合成从该位置开始的文本后播放：
+    - 必须走 `generation_lock`（忙时拒绝，不排队）
+    - 不写入生成历史，不触发“生成后复制 MP3 到剪贴板”等副作用
 - 自检脚本：
   - `tools/flet_runtime_selfcheck.py`
   - 用于在打包前快速验证视图构造、设置联动、历史页按钮回调与当前 Flet 运行时签名。

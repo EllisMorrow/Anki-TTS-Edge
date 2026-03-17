@@ -11,17 +11,15 @@ Anki-TTS-Edge is a free, high-quality voice generation tool powered by Microsoft
 
 </div>
 
-## 🔄 Latest Stabilization Update (v2.9.1)
+## 🔄 Latest Stabilization Update (v2.9.2)
 
-- Added **Offline TTS Engine (Local Kokoro sidecar)**: optional download with SHA256 verification + healthcheck, and one-click switch between online/offline.
-- Offline mode V1 notes: empty `timestamps` (no word highlighting/click-to-seek), default support for `Chinese + English`, and optional auto-fallback to online for other languages.
-- In offline mode, the voice list now shows the official Kokoro voice catalog (sid groups: Chinese (M/F), UK English (F), US English (F)) and includes an "Offline voice demo" link to the official preview page.
-- Engine switching now stops playback and clears the current audio state to avoid the "it still sounds offline after switching to online" confusion; it prompts you to re-generate.
-- Edge online failures are no longer swallowed: the UI surfaces more specific error messages (network/voice/service) for faster diagnosis.
-- Fully stabilized the `Flet` desktop runtime and packaged EXE startup path.
-- Reworked the main interaction flows for copy-to-generate, selection single/dual voice mode, and history play/delete/clear.
-- Added a busy-state circuit breaker to the selection flow to prevent freezes and runaway CPU/memory usage during repeated selections.
-- Hardened MP3 file clipboard output, history cleanup, and same-request audio cache hits for faster repeat generation.
+- **Fix stale playback after voice switching**: Playback cache validation now includes engine + voice/sid + rate/volume/pitch + text, so switching voices will re-generate on the next play.
+- **Offline point-read restored (via re-synthesis)**: When offline Kokoro has no timestamps, the UI still shows a clickable text overlay. Clicking a character/word stops current playback and re-synthesizes the suffix from that position (no history entry, no clipboard MP3 side effects).
+- Offline mode V1 notes: `timestamps` are still empty (no real-time word highlight sync / no millisecond seek). Point-read works via re-synthesis, and very long text will automatically disable the overlay for performance.
+- In offline mode, the voice list shows the official Kokoro voice catalog (sid groups: Chinese (M/F), UK English (F), US English (F)) and includes an "Offline voice demo" link to the official preview page.
+- Engine switching stops playback and clears the current audio state to avoid confusing stale audio with the new engine; it prompts you to re-generate.
+- Edge online failures are surfaced with more diagnosable messages, including a clear locale mismatch hint for the common "Chinese text + non-zh voice" case.
+- Added a busy-state circuit breaker for selection/copy triggered generation to prevent freezes and runaway CPU/memory usage during repeated triggers.
 
 ## ✨ Key Features
 

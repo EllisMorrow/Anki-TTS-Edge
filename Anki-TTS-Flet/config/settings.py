@@ -21,6 +21,9 @@ class SettingsManager:
             "monitor_selection_enabled": False,
             "minimize_to_tray": False,
             "dual_voice_mode_enabled": False,
+            # When dual voice mode is disabled, which slot ("left"/"right") the single-generate button uses.
+            # Default to "right" to preserve legacy behavior.
+            "single_voice_active_slot": "right",
             "selection_dual_mode_enabled": False,
             "local_engine_auto_fallback": True,
             "local_engine_download_source": "official",
@@ -89,6 +92,10 @@ class SettingsManager:
                      self.settings["selected_voice_right"] = self.settings.get("selected_voice_left", DEFAULT_VOICE)
                 if not self.settings.get("selected_voice_left"):
                      self.settings["selected_voice_left"] = self.settings.get("selected_voice_right", DEFAULT_VOICE)
+
+                active_slot = str(self.settings.get("single_voice_active_slot", "right") or "right").strip().lower()
+                if active_slot not in ("left", "right"):
+                    self.settings["single_voice_active_slot"] = "right"
                 if self.settings.get("selection_dual_mode_enabled"):
                     self.settings["dual_voice_mode_enabled"] = True
                     self.settings["monitor_selection_enabled"] = True

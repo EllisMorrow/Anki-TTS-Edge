@@ -7,7 +7,7 @@ import inspect
 import re
 import time
 from config.constants import CUSTOM_WINDOW_TITLE, ICON_PATH, APP_VERSION, DEFAULT_VOICE
-from ui.home_view import HomeView
+from ui.home_view import HomeView, MAX_HIGHLIGHT_WORDS
 from core.voices import get_cached_voices, fetch_voices_from_network
 from core.kokoro_voice_catalog import build_kokoro_v1_1_voice_catalog
 from ui.history_view import HistoryView
@@ -17,6 +17,7 @@ from core.history import history_manager
 from config.settings import settings_manager
 from core.tts_manager import TTSManager
 from core.tts_types import SynthesisRequest
+from utils.text import sanitize_text
 from datetime import datetime
 import os
 import pygame
@@ -122,8 +123,8 @@ async def main(page: ft.Page):
     
     
     # Helper for Snackbar (Flet 0.21+ compatibility)
-    def show_message(msg, is_error=False):
-        color = ft.Colors.RED if is_error else ft.Colors.GREEN
+    def show_message(msg, is_error=False, bgcolor=None):
+        color = bgcolor or (ft.Colors.RED if is_error else ft.Colors.GREEN)
         page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=color)
         page.snack_bar.open = True
         page.update()
@@ -343,6 +344,20 @@ async def main(page: ft.Page):
             monitor_manager.stop_monitors()
         if tray_manager:
             tray_manager.stop()
+
+        # If offline Kokoro is generating, ensure the child process is killed so the app can exit promptly.
+        try:
+            mgr = tts_manager
+        except Exception:
+            mgr = None
+        try:
+            if mgr:
+                provider = mgr.get_provider("local_kokoro")
+                cancel = getattr(provider, "cancel_active", None)
+                if cancel:
+                    await cancel(reason="shutdown")
+        except Exception as ex:
+            print(f"DEBUG: cancel local engine failed: {ex}")
         await maybe_await(page.window.destroy())
     
     # Restart cleanup handler - stop tray and monitors before restart
@@ -494,9 +509,31 @@ async def main(page: ft.Page):
         key = "local_kokoro_sid_left" if slot == "left" else "local_kokoro_sid_right"
         sid = _parse_int(settings_manager.get(key, 0), 0)
         return max(0, sid)
+
+    def get_single_active_slot() -> str:
+        raw = str(settings_manager.get("single_voice_active_slot", "right") or "right").strip().lower()
+        return "left" if raw == "left" else "right"
+
+    def get_active_slot_for_quick_actions() -> str:
+        """
+        Resolve which voice slot to use for one-click actions (selection GO, clipboard TTS, input play button).
+
+        Even in dual-voice UI mode, users expect "the last voice they clicked" to be used when there's only one action
+        button (e.g. selection GO). We persist it in `single_voice_active_slot` on every voice pick.
+        """
+        return get_single_active_slot()
     
+    # Global generation lock: prevent concurrent synth calls and also enables "busy" checks.
+    generation_lock = asyncio.Lock()
+    tts_manager = TTSManager(settings_manager)
+
     async def handle_satellite_action(text, mode="B"):
         if not text:
+            return
+
+        # Don't queue selection-triggered generations. If the app is busy, reject fast.
+        if generation_lock.locked():
+            show_message(i18n.get("status_busy_generating"), bgcolor=ft.Colors.ORANGE_400)
             return
         print(f"Main: Received ACTION for '{text[:10]}', mode='{mode}'")
         
@@ -505,7 +542,12 @@ async def main(page: ft.Page):
             monitor_manager.set_selection_overlay_active(False)
             monitor_manager.set_selection_generation_active(True)
         
-        voice_slot = "right" if mode == "B" else "left"
+        # In selection single mode, Satellite only sends mode="B" ("Go") but we should still respect
+        # the user's active slot selection.
+        if settings_manager.get("selection_dual_mode_enabled", False):
+            voice_slot = "right" if mode == "B" else "left"
+        else:
+            voice_slot = get_active_slot_for_quick_actions()
         voice = get_voice_for_slot(voice_slot)
         
         print(f"DEBUG: Handle Action - Voice Slot: {voice_slot}, Voice: '{voice}'")
@@ -566,6 +608,18 @@ async def main(page: ft.Page):
         "path": None,
         "timestamps": None,
         "text": None,
+        # --- Audio identity (runtime-only) ---
+        # Used to validate whether the current cached audio matches the current selection/engine/params.
+        "engine_id": None,        # "edge_online" | "local_kokoro"
+        "slot": None,             # "left" | "right" (which slot generated this audio)
+        "voice": None,            # Edge voice name (online)
+        "speaker_id": None,       # Kokoro sid (offline)
+        "rate": None,             # "+0%"
+        "volume": None,           # "+0%"
+        "pitch": None,            # "+0Hz"
+        "audio_text": None,       # text actually synthesized (may be a suffix in point-read)
+        "full_text": None,        # full input text used for point-read mapping
+        "click_tokens": None,     # offline clickable tokens [{start_char,end_char}, ...]
         "is_playing": False,
         "is_paused": False,  # Distinguish between pause and stop
         "current_sentence_index": 0,
@@ -576,8 +630,6 @@ async def main(page: ft.Page):
     }
     playback_monitor_state = {"run_id": 0}
     clipboard_generation_state = {"text": "", "at": 0.0}
-    generation_lock = asyncio.Lock()
-    tts_manager = TTSManager(settings_manager)
 
     def sync_home_controls(*controls):
         home_view._safe_update(*controls)
@@ -595,7 +647,7 @@ async def main(page: ft.Page):
             show_message(f"MP3 剪贴板写入失败: {ex}", True)
             return False
 
-    def apply_generated_audio_result(text, voice, path, timestamps=None, autoplay=None):
+    def apply_generated_audio_result(text, voice, path, timestamps=None, autoplay=None, identity=None):
         if not path:
             return
 
@@ -605,11 +657,24 @@ async def main(page: ft.Page):
         current_audio_state["path"] = path
         current_audio_state["timestamps"] = timestamps
         current_audio_state["text"] = text
+        # Reset offline click tokens by default; they will be rebuilt on playback when needed.
+        current_audio_state["click_tokens"] = None
         current_audio_state["text_dirty"] = False
         current_audio_state["current_sentence_index"] = 0
         current_audio_state["current_word_index"] = 0
         current_audio_state["current_playback_start_ms"] = 0
         current_audio_state["stop_playback_at_ms"] = None
+
+        if isinstance(identity, dict):
+            current_audio_state["engine_id"] = identity.get("engine_id")
+            current_audio_state["slot"] = identity.get("slot")
+            current_audio_state["voice"] = identity.get("voice")
+            current_audio_state["speaker_id"] = identity.get("speaker_id")
+            current_audio_state["rate"] = identity.get("rate")
+            current_audio_state["volume"] = identity.get("volume")
+            current_audio_state["pitch"] = identity.get("pitch")
+            current_audio_state["audio_text"] = identity.get("audio_text")
+            current_audio_state["full_text"] = identity.get("full_text")
 
         copy_generated_file_to_clipboard(path)
         history_manager.add_record(text, voice, path)
@@ -635,12 +700,13 @@ async def main(page: ft.Page):
             try:
                 engine_id = settings_manager.get("tts_engine", "edge_online") or "edge_online"
                 speaker_id = get_local_sid_for_slot(slot) if engine_id == "local_kokoro" else None
+                rate_str, volume_str, pitch_str = _current_params_signature()
                 request = SynthesisRequest(
                     text=sanitized_text,
                     voice=selected_voice,
-                    rate=f"{int(home_view.rate_slider.value):+d}%",
-                    volume=f"{int(home_view.volume_slider.value):+d}%",
-                    pitch="+0Hz",
+                    rate=rate_str,
+                    volume=volume_str,
+                    pitch=pitch_str,
                     engine=engine_id,
                     speaker_id=speaker_id,
                 )
@@ -688,12 +754,31 @@ async def main(page: ft.Page):
                     history_voice_label = selected_voice
 
             if path:
-                apply_generated_audio_result(sanitized_text, history_voice_label, path, timestamps, autoplay=autoplay)
+                actual_engine = (result.engine if result else None) or engine_id
+                identity = {
+                    "engine_id": actual_engine,
+                    "slot": slot,
+                    "voice": selected_voice if actual_engine == "edge_online" else None,
+                    "speaker_id": speaker_id if actual_engine == "local_kokoro" else None,
+                    "rate": rate_str,
+                    "volume": volume_str,
+                    "pitch": pitch_str,
+                    "audio_text": sanitized_text,
+                    "full_text": sanitized_text,
+                }
+                apply_generated_audio_result(
+                    sanitized_text,
+                    history_voice_label,
+                    path,
+                    timestamps,
+                    autoplay=autoplay,
+                    identity=identity,
+                )
                 if fallback_from:
                     show_message("本地引擎不可用，已自动回退在线模式。")
             else:
                 home_view.set_status(f"生成失败: {error}", ft.Icons.ERROR_OUTLINE, ft.Colors.RED_100)
-                show_message(f"Error: {error}", True)
+                show_message(str(error or "unknown_error"), True)
 
             return path, error, timestamps
 
@@ -712,6 +797,10 @@ async def main(page: ft.Page):
     async def handle_generate(e, voice, slot="right"):
         # Auto-clean HTML tags before processing
         home_view.clean_text_input()
+
+        if generation_lock.locked():
+            home_view.set_status(i18n.get("status_busy_generating"), ft.Icons.HOURGLASS_EMPTY, ft.Colors.BLUE_100)
+            return
         
         text = home_view.get_input_text()
         if not text:
@@ -722,12 +811,13 @@ async def main(page: ft.Page):
         await generate_audio_for_voice(text, voice, slot=slot)
 
     async def handle_generate_b(e):
-        # Latest Voice (B)
-        v = get_voice_for_slot("right", fallback_to_default=False)
+        # Single button uses the currently active slot; dual mode keeps explicit A/B.
+        slot = "right" if settings_manager.get("dual_voice_mode_enabled", False) else get_single_active_slot()
+        v = get_voice_for_slot(slot, fallback_to_default=False)
         if not v:
             show_message(i18n.get("status_no_voice_error"), True)
             return
-        await handle_generate(e, v, slot="right")
+        await handle_generate(e, v, slot=slot)
 
     async def handle_generate_a(e):
         # Previous Voice (A)
@@ -765,6 +855,17 @@ async def main(page: ft.Page):
                 if path_changed:
                     current_audio_state["timestamps"] = None
                     current_audio_state["text"] = None
+                    # Identity is unknown when switching to an arbitrary new path (e.g. playing a history record).
+                    current_audio_state["engine_id"] = None
+                    current_audio_state["slot"] = None
+                    current_audio_state["voice"] = None
+                    current_audio_state["speaker_id"] = None
+                    current_audio_state["rate"] = None
+                    current_audio_state["volume"] = None
+                    current_audio_state["pitch"] = None
+                    current_audio_state["audio_text"] = None
+                    current_audio_state["full_text"] = None
+                    current_audio_state["click_tokens"] = None
                 
                 if timestamps:
                     current_audio_state["timestamps"] = timestamps
@@ -780,13 +881,37 @@ async def main(page: ft.Page):
                 # Set text input to read-only during playback
                 home_view.text_input.read_only = True
                 
-                # Show highlighted text if we have word timings
+                # Show highlighted text if we have word timings; for offline Kokoro we show a clickable overlay
+                # based on tokenization (no real timestamps).
                 ts = current_audio_state["timestamps"]
                 if ts and ts.get("words"):
+                    current_audio_state["click_tokens"] = None
                     home_view.show_highlighted_text(
                         current_audio_state.get("text", ""),
                         ts["words"]
                     )
+                else:
+                    engine_id = current_audio_state.get("engine_id") or (settings_manager.get("tts_engine", "edge_online") or "edge_online")
+                    if engine_id == "local_kokoro":
+                        full_text = current_audio_state.get("full_text") or current_audio_state.get("text") or home_view.get_input_text() or ""
+                        tokens = build_offline_click_tokens(full_text)
+                        current_audio_state["full_text"] = full_text
+                        current_audio_state["click_tokens"] = tokens
+                        if tokens and len(tokens) <= MAX_HIGHLIGHT_WORDS:
+                            home_view.show_highlighted_text(full_text, tokens)
+                        else:
+                            # Ensure overlay hidden but keep input read-only during playback.
+                            try:
+                                home_view.hide_highlighted_text()
+                            except Exception:
+                                pass
+                            home_view.text_input.read_only = True
+                            home_view.set_status(
+                                i18n.get("status_point_read_text_too_long", "正在播放...（文本过长，点读已禁用）"),
+                                ft.Icons.PLAY_CIRCLE_OUTLINE,
+                                ft.Colors.GREEN_100,
+                            )
+                            sync_home_controls(home_view.text_input, home_view.highlighted_text_overlay)
                 
                 sync_home_controls(home_view.text_input)
                 
@@ -842,17 +967,15 @@ async def main(page: ft.Page):
             return
         
         # Case 3: No audio or text changed -> need to generate first
+        # Only clean text when we are going to generate (avoid mutating input during pause/resume actions).
+        home_view.clean_text_input()
         text = home_view.get_input_text()
         if not text:
             home_view.set_status("请输入文本", ft.Icons.WARNING_AMBER, ft.Colors.ORANGE_100)
             return
         
-        # Check if we have valid cached audio
-        has_valid_cache = (
-            current_audio_state["path"] and 
-            os.path.exists(current_audio_state["path"]) and
-            not home_view.is_text_dirty()
-        )
+        # Check if current cached audio matches current selection/engine/params.
+        has_valid_cache = is_audio_cache_valid_for_current_selection()
         
         if has_valid_cache:
             # Play from cache
@@ -863,8 +986,9 @@ async def main(page: ft.Page):
             })
         else:
             # Need to generate first
-            voice = get_voice_for_slot("right")
-            await generate_audio_for_voice(text, voice, slot="right", status_message="正在生成音频...", autoplay=True)
+            slot = get_active_slot_for_quick_actions()
+            voice = get_voice_for_slot(slot)
+            await generate_audio_for_voice(text, voice, slot=slot, status_message="正在生成音频...", autoplay=True)
     
     def handle_replay(e):
         """Replay from beginning"""
@@ -876,12 +1000,13 @@ async def main(page: ft.Page):
         """Helper to generate audio if missing before navigation"""
         if not current_audio_state.get("timestamps"):
              # Need to generate
-             v = get_voice_for_slot("right", fallback_to_default=False)
+             slot = get_active_slot_for_quick_actions()
+             v = get_voice_for_slot(slot, fallback_to_default=False)
              if not v:
                  home_view.set_status("请选择声音", ft.Icons.WARNING_AMBER, ft.Colors.ORANGE_100)
                  return False
                  
-             await handle_generate(e, v, slot="right")
+             await handle_generate(e, v, slot=slot)
              
              # After generation, handle_generate starts playback from 0. 
              # We might intercept or just let it be, but we need timestamps now.
@@ -1018,7 +1143,116 @@ async def main(page: ft.Page):
         """Click to Play: Jump to the exact clicked word position"""
         timestamps = current_audio_state.get("timestamps")
         if not timestamps or not timestamps.get("words"):
-            show_message("当前音频缺少时间戳，无法点读（离线模式暂不支持）。", True)
+            engine_id = current_audio_state.get("engine_id") or (settings_manager.get("tts_engine", "edge_online") or "edge_online")
+            if engine_id != "local_kokoro":
+                show_message("当前音频缺少时间戳，无法点读。", True)
+                return
+
+            # Offline point-read: re-synthesize the suffix from the clicked position and play it.
+            full_text = current_audio_state.get("full_text") or home_view.get_input_text() or ""
+            tokens = current_audio_state.get("click_tokens") or build_offline_click_tokens(full_text)
+            current_audio_state["full_text"] = full_text
+            current_audio_state["click_tokens"] = tokens
+
+            if not tokens or word_index < 0 or word_index >= len(tokens):
+                return
+
+            start_char = int(tokens[word_index].get("start_char", 0) or 0)
+            if start_char < 0 or start_char >= len(full_text):
+                return
+
+            subtext = full_text[start_char:]
+            if not _normalize_input_text_for_cache(subtext):
+                return
+
+            if generation_lock.locked():
+                show_message(i18n.get("status_busy_generating"), bgcolor=ft.Colors.ORANGE_400)
+                return
+
+            async def _runner():
+                # Stop current playback first to avoid device/state conflicts.
+                try:
+                    handle_stop_audio(None)
+                except Exception:
+                    pass
+
+                # Acquire generation lock (busy -> reject, no queue).
+                if generation_lock.locked():
+                    show_message(i18n.get("status_busy_generating"), bgcolor=ft.Colors.ORANGE_400)
+                    return
+                try:
+                    await asyncio.wait_for(generation_lock.acquire(), timeout=0.01)
+                except asyncio.TimeoutError:
+                    show_message(i18n.get("status_busy_generating"), bgcolor=ft.Colors.ORANGE_400)
+                    return
+
+                slot = get_active_slot_for_quick_actions()
+                voice = get_voice_for_slot(slot)
+                rate_str, volume_str, pitch_str = _current_params_signature()
+                current_engine = settings_manager.get("tts_engine", "edge_online") or "edge_online"
+                speaker_id = get_local_sid_for_slot(slot) if current_engine == "local_kokoro" else None
+
+                home_view.set_status(
+                    i18n.get("status_point_read_generating", "点读：正在从所选位置生成..."),
+                    ft.Icons.HOURGLASS_EMPTY,
+                    ft.Colors.BLUE_100,
+                )
+
+                try:
+                    try:
+                        request = SynthesisRequest(
+                            text=subtext,
+                            voice=voice,
+                            rate=rate_str,
+                            volume=volume_str,
+                            pitch=pitch_str,
+                            engine=current_engine,
+                            speaker_id=speaker_id,
+                        )
+                        timeout_s = 120.0 if request.engine == "local_kokoro" else 30.0
+                        result = await asyncio.wait_for(tts_manager.synthesize(request), timeout=timeout_s)
+                    except asyncio.TimeoutError:
+                        result = None
+                        path, error, ts_payload = None, i18n.get("status_timeout_error", "Generation timed out"), None
+                    except Exception as ex:
+                        result = None
+                        path, error, ts_payload = None, str(ex), None
+                    else:
+                        if result and result.ok:
+                            path = result.audio_path
+                            ts_payload = result.timestamps.to_dict() if result.timestamps else None
+                            error = None
+                        else:
+                            path = None
+                            ts_payload = None
+                            error = (result.error if result else None) or "unknown_error"
+                finally:
+                    try:
+                        generation_lock.release()
+                    except Exception:
+                        pass
+
+                if not path:
+                    home_view.set_status(f"点读生成失败: {error}", ft.Icons.ERROR_OUTLINE, ft.Colors.RED_100)
+                    show_message(str(error or "unknown_error"), True)
+                    return
+
+                # Update identity but do not write history/clipboard for point-read.
+                actual_engine = (result.engine if result else None) or current_engine
+                current_audio_state["engine_id"] = actual_engine
+                current_audio_state["slot"] = slot
+                current_audio_state["voice"] = voice if actual_engine == "edge_online" else None
+                current_audio_state["speaker_id"] = speaker_id if actual_engine == "local_kokoro" else None
+                current_audio_state["rate"] = rate_str
+                current_audio_state["volume"] = volume_str
+                current_audio_state["pitch"] = pitch_str
+                current_audio_state["audio_text"] = subtext
+                current_audio_state["full_text"] = full_text
+                current_audio_state["click_tokens"] = tokens
+
+                handle_play_audio({"path": path, "timestamps": ts_payload, "text": full_text})
+
+            page.run_task(_runner)
             return
         
         if word_index < 0 or word_index >= len(timestamps["words"]): return
@@ -1154,6 +1388,7 @@ async def main(page: ft.Page):
         new_voice = payload.get("name")
         voice_side = payload.get("side") or "right"
         engine_id = settings_manager.get("tts_engine", "edge_online") or "edge_online"
+        is_dual = bool(settings_manager.get("dual_voice_mode_enabled", False))
 
         if engine_id == "local_kokoro":
             sid = payload.get("sid")
@@ -1171,8 +1406,11 @@ async def main(page: ft.Page):
                 return
 
             settings_manager.set(key, sid_int)
+            # Track last active slot even in dual mode for quick actions (selection GO, clipboard TTS, etc.)
+            settings_manager.set("single_voice_active_slot", voice_side)
             settings_manager.save_settings()
             print(f"Kokoro sid slot updated: {voice_side}={sid_int}")
+            home_view.set_single_active_slot(voice_side)
             home_view.set_local_voice_sids(get_local_sid_for_slot("left"), get_local_sid_for_slot("right"))
             page.update()
             return
@@ -1188,10 +1426,13 @@ async def main(page: ft.Page):
             return
 
         settings_manager.set(key, new_voice)
+        # Track last active slot even in dual mode for quick actions (selection GO, clipboard TTS, etc.)
+        settings_manager.set("single_voice_active_slot", voice_side)
         settings_manager.save_settings()
 
         print(f"Voice Slot Updated: {voice_side}='{new_voice}'")
 
+        home_view.set_single_active_slot(voice_side)
         home_view.set_selections(get_voice_for_slot("left"), get_voice_for_slot("right"))
         page.update()
 
@@ -1214,6 +1455,95 @@ async def main(page: ft.Page):
         settings_manager.save_settings()
         home_view.set_local_voice_sids(get_local_sid_for_slot("left"), get_local_sid_for_slot("right"))
         page.update()
+
+    def _current_params_signature() -> tuple[str, str, str]:
+        """Return current (rate, volume, pitch) in the same normalized format as synthesis requests."""
+        rate = f"{int(home_view.rate_slider.value):+d}%"
+        volume = f"{int(home_view.volume_slider.value):+d}%"
+        pitch = "+0Hz"
+        return rate, volume, pitch
+
+    def _normalize_input_text_for_cache(text: str) -> str:
+        # Keep consistent with TTS layer normalization to avoid false cache misses on whitespace.
+        return sanitize_text(text or "")
+
+    def is_audio_cache_valid_for_current_selection() -> bool:
+        """Whether current_audio_state can be played as-is for the *current* active slot selection."""
+        path = current_audio_state.get("path")
+        if not path or not os.path.exists(path):
+            return False
+
+        expected_engine = settings_manager.get("tts_engine", "edge_online") or "edge_online"
+        expected_slot = get_active_slot_for_quick_actions()
+        expected_voice = get_voice_for_slot(expected_slot, fallback_to_default=False)
+        expected_sid = get_local_sid_for_slot(expected_slot) if expected_engine == "local_kokoro" else None
+        expected_rate, expected_volume, expected_pitch = _current_params_signature()
+        expected_text = _normalize_input_text_for_cache(home_view.get_input_text() or "")
+
+        cached_engine = current_audio_state.get("engine_id")
+        cached_text = _normalize_input_text_for_cache(
+            current_audio_state.get("full_text")
+            or current_audio_state.get("text")
+            or ""
+        )
+
+        if cached_engine != expected_engine:
+            return False
+        if cached_text != expected_text:
+            return False
+        if (current_audio_state.get("rate") or "") != expected_rate:
+            return False
+        if (current_audio_state.get("volume") or "") != expected_volume:
+            return False
+        if (current_audio_state.get("pitch") or "") != expected_pitch:
+            return False
+
+        if expected_engine == "edge_online":
+            return (current_audio_state.get("voice") or "") == (expected_voice or "")
+
+        if expected_engine == "local_kokoro":
+            try:
+                cached_sid = int(current_audio_state.get("speaker_id") or -1)
+            except Exception:
+                cached_sid = -1
+            try:
+                expected_sid_i = int(expected_sid) if expected_sid is not None else -1
+            except Exception:
+                expected_sid_i = -1
+            return cached_sid == expected_sid_i
+
+        return False
+
+    def build_offline_click_tokens(text_value: str) -> list[dict]:
+        """
+        Lightweight tokenizer for offline point-read UI (no real timestamps).
+
+        - CJK: one character per token (enables "click a character").
+        - Alnum runs: grouped as a token.
+        - Punctuation/spaces are left as gaps (rendered but not clickable).
+        """
+        tokens: list[dict] = []
+        s = text_value or ""
+        i = 0
+        n = len(s)
+        while i < n:
+            ch = s[i]
+            if ch.isspace():
+                i += 1
+                continue
+            if "\u4e00" <= ch <= "\u9fff":
+                tokens.append({"start_char": i, "end_char": i + 1, "text": ch})
+                i += 1
+                continue
+            if ch.isalnum():
+                j = i + 1
+                while j < n and s[j].isalnum():
+                    j += 1
+                tokens.append({"start_char": i, "end_char": j, "text": s[i:j]})
+                i = j
+                continue
+            i += 1
+        return tokens
 
     home_view.on_local_sid_changed = handle_local_sid_changed
 
@@ -1318,6 +1648,9 @@ async def main(page: ft.Page):
         if not text:
             return
         async def _runner():
+            if generation_lock.locked():
+                print("DEBUG: clipboard generation ignored because generation is busy")
+                return
             home_view.set_input_text(text)
             now = time.monotonic()
             if text == clipboard_generation_state["text"] and now - clipboard_generation_state["at"] < 1.2:
@@ -1325,8 +1658,9 @@ async def main(page: ft.Page):
                 return
             clipboard_generation_state["text"] = text
             clipboard_generation_state["at"] = now
-            voice = get_voice_for_slot("right")
-            await generate_audio_for_voice(text, voice, slot="right", status_message="正在根据复制内容生成音频...")
+            slot = get_active_slot_for_quick_actions()
+            voice = get_voice_for_slot(slot)
+            await generate_audio_for_voice(text, voice, slot=slot, status_message="正在根据复制内容生成音频...")
 
         page.run_task(_runner)
 
@@ -1413,6 +1747,7 @@ async def main(page: ft.Page):
         # Update dual mode
         is_dual = settings_manager.get("dual_voice_mode_enabled", False)
         home_view.set_dual_mode(is_dual)
+        home_view.set_single_active_slot(get_single_active_slot())
 
         if "tts_engine" in settings_dict:
             new_engine = settings_manager.get("tts_engine", "edge_online") or "edge_online"
@@ -1485,6 +1820,7 @@ async def main(page: ft.Page):
     is_dual = settings_manager.get("dual_voice_mode_enabled", False)
     home_view.set_dual_mode(is_dual)
     home_view.set_tts_engine(settings_manager.get("tts_engine", "edge_online") or "edge_online")
+    home_view.set_single_active_slot(get_single_active_slot())
     home_view.set_local_voice_sids(get_local_sid_for_slot("left"), get_local_sid_for_slot("right"))
     home_view.set_selections(
         get_voice_for_slot("left"),

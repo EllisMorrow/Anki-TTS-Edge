@@ -10,6 +10,32 @@ from utils.i18n import i18n
 
 from core.alignment import AlignmentEngine
 
+
+def _has_cjk(text: str) -> bool:
+    for ch in text or "":
+        if "\u4e00" <= ch <= "\u9fff":
+            return True
+    return False
+
+
+def _extract_voice_locale(voice: str) -> str | None:
+    """Best-effort locale extraction for Edge voice name/shortname."""
+    raw = (voice or "").strip()
+    if not raw:
+        return None
+
+    # Full name: Microsoft Server Speech Text to Speech Voice (zh-CN, XiaoxiaoNeural)
+    m = re.search(r"Voice\s*\(\s*([a-z]{2,3}-[A-Z]{2,}(?:-[A-Za-z]+)?)\s*,", raw)
+    if m:
+        return m.group(1)
+
+    # Short name: zh-CN-XiaoxiaoNeural
+    m = re.match(r"^([a-z]{2,3}-[A-Z]{2,}(?:-[A-Za-z]+)?)-", raw)
+    if m:
+        return m.group(1)
+
+    return None
+
 async def generate_audio_with_timestamps_async(text, voice, rate, volume, pitch, output_path):
     """
     Async function to generate audio using edge_tts and capture word boundaries.
@@ -73,9 +99,22 @@ async def generate_audio_with_timestamps_async(text, voice, rate, volume, pitch,
                 os.remove(timestamps_path)
         except Exception:
             pass
-        msg = str(e)
-        if "No audio was received" in msg:
-            msg += " (Hint: Does this voice support the text language?)"
+        original_msg = str(e)
+        msg = original_msg
+
+        if "No audio was received" in original_msg:
+            locale = (_extract_voice_locale(voice) or "").strip()
+            locale_l = locale.lower()
+            text_has_cjk = _has_cjk(text)
+
+            # Most common case: Chinese text + non-zh voice -> Edge returns NoAudioReceived.
+            if text_has_cjk and locale and not locale_l.startswith("zh"):
+                msg = i18n.get(
+                    "status_edge_locale_mismatch",
+                    locale=locale,
+                )
+            else:
+                msg = i18n.get("status_edge_no_audio_received", original_msg)
         print(i18n.get("debug_edge_tts_fail", msg))
         # Let caller surface the actual error instead of a generic "internal error".
         raise RuntimeError(msg) from e

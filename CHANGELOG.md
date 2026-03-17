@@ -1,5 +1,18 @@
 # 更新日志 / Changelog
 
+## v2.9.2 (2026-03-17)
+
+### 🔧 修复 / Fixes
+
+- **换声音后再次播放会重新生成**：播放按钮的缓存判定现在会包含 `引擎 + 声音/音色(sid) + 语速/音量/音高 + 文本`，避免“文本没变但换声音仍播放旧音频”的问题。
+  **Voice switch now takes effect on next play**: Playback cache validation now includes engine + voice/sid + rate/volume/pitch + text, preventing stale audio when switching voices without changing text.
+
+- **离线点读恢复（通过重新合成）**：离线 Kokoro 无时间戳时，播放界面仍提供可点击文本覆盖层；点击某字/词会停止当前播放并重新合成从该位置开始的文本后播放（不写入历史、不复制到剪贴板）。
+  **Offline point-read restored (via re-synthesis)**: When offline Kokoro has no timestamps, the UI still provides a clickable text overlay. Clicking a character/word stops current playback and re-synthesizes the suffix from that position, without writing history or copying to clipboard.
+
+- **离线点读忙时断路器 + 长文本保护**：点读生成中会拒绝后续点击；文本过长时自动禁用点读覆盖层并提示，避免 UI 卡顿。
+  **Busy-state circuit breaker + long-text guard for offline point-read**: Rejects additional clicks while generating, and disables the overlay for very long text to prevent UI lag.
+
 ## v2.9.1 (2026-03-16)
 
 ### 🔧 修复 / Fixes

@@ -100,6 +100,8 @@ class HomeView(ft.Container):
         self._tts_engine_id = "edge_online"
         self._local_sid_left = 0
         self._local_sid_right = 0
+        # In single-voice mode (dual_mode=False), which slot is considered "active" for generation.
+        self._single_active_slot = "right"
         self.offline_hint_text = ft.Text(i18n.get("offline_voice_hint"), size=12)
         self.offline_hint_container = ft.Container(
             content=ft.Row(
@@ -495,11 +497,29 @@ class HomeView(ft.Container):
         self.dual_mode = enabled
         if enabled:
             self.btn_gen_a.visible = True
+            # Dual mode: show both explicit buttons.
             self.btn_gen_b.text = i18n.get("generate_button_latest")
         else:
             self.btn_gen_a.visible = False
-            self.btn_gen_b.text = i18n.get("generate_button_label")
+            # Single mode: make the button label explicit about which slot is active.
+            self.btn_gen_b.text = (
+                i18n.get("generate_button_previous")
+                if getattr(self, "_single_active_slot", "right") == "left"
+                else i18n.get("generate_button_latest")
+            )
         self._safe_update(self.btn_gen_a, self.btn_gen_b)
+
+    def set_single_active_slot(self, slot: str):
+        raw = str(slot or "right").strip().lower()
+        self._single_active_slot = "left" if raw == "left" else "right"
+        if getattr(self, "dual_mode", False):
+            return
+        self.btn_gen_b.text = (
+            i18n.get("generate_button_previous")
+            if self._single_active_slot == "left"
+            else i18n.get("generate_button_latest")
+        )
+        self._safe_update(self.btn_gen_b)
 
     def set_selections(self, left, right):
         self.selected_voice_left = left
@@ -617,22 +637,20 @@ class HomeView(ft.Container):
                 display_name = item.get("display_name") or name
 
                 # Selection status
+                is_dual = bool(getattr(self, "dual_mode", False))
+                active_slot = getattr(self, "_single_active_slot", "right")
                 sid = item.get("sid") if isinstance(item, dict) else None
+                sid_int = None
                 if sid is not None:
                     try:
                         sid_int = int(sid)
                     except Exception:
                         sid_int = None
                     is_right = sid_int is not None and sid_int == getattr(self, "_local_sid_right", None)
-                    is_left = (
-                        sid_int is not None
-                        and hasattr(self, "dual_mode")
-                        and self.dual_mode
-                        and sid_int == getattr(self, "_local_sid_left", None)
-                    )
+                    is_left = sid_int is not None and sid_int == getattr(self, "_local_sid_left", None)
                 else:
-                    is_right = hasattr(self, 'selected_voice_right') and name == self.selected_voice_right
-                    is_left = hasattr(self, 'selected_voice_left') and hasattr(self, 'dual_mode') and self.dual_mode and name == self.selected_voice_left
+                    is_right = hasattr(self, "selected_voice_right") and name == self.selected_voice_right
+                    is_left = hasattr(self, "selected_voice_left") and name == self.selected_voice_left
                 
                 trailing_content = None
                 bg = "surfaceVariant"
@@ -642,24 +660,48 @@ class HomeView(ft.Container):
                 BG_A = ft.Colors.INDIGO_50 if self._host_page.theme_mode == ft.ThemeMode.LIGHT else ft.Colors.INDIGO_900
                 BG_BOTH = ft.Colors.BLUE_50 if self._host_page.theme_mode == ft.ThemeMode.LIGHT else ft.Colors.BLUE_900
                 
-                show_b_badge = hasattr(self, 'dual_mode') and self.dual_mode
-                
-                if is_right and is_left:
-                     trailing_content = ft.Row([
-                         ft.Container(content=ft.Text("A", color="white", size=10, weight="bold"), bgcolor=ft.Colors.INDIGO, padding=5, border_radius=5),
-                         ft.Container(content=ft.Text("B", color="white", size=10, weight="bold"), bgcolor=ft.Colors.TEAL, padding=5, border_radius=5)
-                     ], spacing=5)
-                     bg = BG_BOTH
-                elif is_right:
-                     if show_b_badge:
-                         trailing_content = ft.Container(content=ft.Text("B", color="white", size=10, weight="bold"), bgcolor=ft.Colors.TEAL, padding=5, border_radius=5)
-                         bg = BG_B
-                     else:
-                         trailing_content = ft.Icon(ft.Icons.CHECK, color=ft.Colors.TEAL)
-                         bg = BG_B
-                elif is_left:
-                     trailing_content = ft.Container(content=ft.Text("A", color="white", size=10, weight="bold"), bgcolor=ft.Colors.INDIGO, padding=5, border_radius=5)
-                     bg = BG_A
+                if is_dual:
+                    if is_right and is_left:
+                        trailing_content = ft.Row(
+                            [
+                                ft.Container(
+                                    content=ft.Text("A", color="white", size=10, weight="bold"),
+                                    bgcolor=ft.Colors.INDIGO,
+                                    padding=5,
+                                    border_radius=5,
+                                ),
+                                ft.Container(
+                                    content=ft.Text("B", color="white", size=10, weight="bold"),
+                                    bgcolor=ft.Colors.TEAL,
+                                    padding=5,
+                                    border_radius=5,
+                                ),
+                            ],
+                            spacing=5,
+                        )
+                        bg = BG_BOTH
+                    elif is_right:
+                        trailing_content = ft.Container(
+                            content=ft.Text("B", color="white", size=10, weight="bold"),
+                            bgcolor=ft.Colors.TEAL,
+                            padding=5,
+                            border_radius=5,
+                        )
+                        bg = BG_B
+                    elif is_left:
+                        trailing_content = ft.Container(
+                            content=ft.Text("A", color="white", size=10, weight="bold"),
+                            bgcolor=ft.Colors.INDIGO,
+                            padding=5,
+                            border_radius=5,
+                        )
+                        bg = BG_A
+                else:
+                    active_is_selected = is_right if active_slot == "right" else is_left
+                    if active_is_selected:
+                        check_color = ft.Colors.TEAL if active_slot == "right" else ft.Colors.INDIGO
+                        trailing_content = ft.Icon(ft.Icons.CHECK, color=check_color)
+                        bg = BG_B if active_slot == "right" else BG_A
 
                 tile = ft.ListTile(
                     leading=ft.Icon(ft.Icons.RECORD_VOICE_OVER, color=ft.Colors.ON_SURFACE),
@@ -958,7 +1000,6 @@ class HomeView(ft.Container):
         self.rate_label_text.value = i18n.get("rate_label")
         self.volume_label_text.value = i18n.get("volume_label")
         self.btn_gen_a.text = i18n.get("generate_button_previous")
-        self.btn_gen_b.text = i18n.get("generate_button_latest") if getattr(self, "dual_mode", False) else i18n.get("generate_button_label")
         self.btn_replay.tooltip = i18n.get("control_replay", "重播")
         self.btn_play_pause.tooltip = i18n.get("control_play_pause", "播放/暂停")
         self.btn_stop.tooltip = i18n.get("control_stop", "停止")
@@ -966,6 +1007,15 @@ class HomeView(ft.Container):
         self.btn_next_sentence.tooltip = i18n.get("control_next_sentence", "下一句")
         self.btn_pin.tooltip = i18n.get("window_pin", "置顶窗口")
         self.btn_expand_collapse.tooltip = i18n.get("collapse_text_input", "收纳") if self._text_expanded else i18n.get("expand_text_input", "展开")
+
+        if getattr(self, "dual_mode", False):
+            self.btn_gen_b.text = i18n.get("generate_button_latest")
+        else:
+            self.btn_gen_b.text = (
+                i18n.get("generate_button_previous")
+                if getattr(self, "_single_active_slot", "right") == "left"
+                else i18n.get("generate_button_latest")
+            )
         self._safe_update()
 
     def _is_mounted(self):
