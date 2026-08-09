@@ -4,6 +4,11 @@ updates:
     directory: /Anki-TTS-Flet
     schedule:
       interval: monthly
+    # Flet and flet-desktop must be migrated and validated together. Keep
+    # routine dependency updates from opening incompatible one-sided PRs.
+    ignore:
+      - dependency-name: flet
+      - dependency-name: flet-desktop
   - package-ecosystem: github-actions
     directory: /
     schedule:
