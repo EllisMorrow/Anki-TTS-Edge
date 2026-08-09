@@ -1,9 +1,9 @@
 flet==0.28.3
 flet-desktop==0.28.3
-edge-tts>=7.2.7
-pygame>=2.5.0
-pyperclip>=1.8.2
-pynput>=1.7.7
-pystray>=0.19.5
-Pillow>=10.0.0
-pywin32>=306
+edge-tts==7.2.8
+pygame==2.6.1
+pyperclip==1.11.0
+pynput==1.8.2
+pystray==0.19.5
+Pillow==12.3.0
+pywin32==312

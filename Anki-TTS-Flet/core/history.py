@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 import time
 from config.constants import HISTORY_FILE, AUDIO_DIR
 from config.settings import settings_manager
@@ -32,8 +33,21 @@ class HistoryManager:
 
     def save_records(self):
         try:
-            with open(self.history_file, "w", encoding="utf-8") as f:
-                json.dump(self.records, f, ensure_ascii=False, indent=4)
+            directory = os.path.dirname(os.path.abspath(self.history_file))
+            os.makedirs(directory, exist_ok=True)
+            fd, temporary_path = tempfile.mkstemp(prefix=".history-", suffix=".tmp", dir=directory)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(self.records, f, ensure_ascii=False, indent=4)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temporary_path, self.history_file)
+            except Exception:
+                try:
+                    os.unlink(temporary_path)
+                except OSError:
+                    pass
+                raise
         except Exception as e:
             print(f"Failed to save history: {e}")
 
@@ -129,23 +143,14 @@ class HistoryManager:
         orphan_count = 0
         try:
             for filename in os.listdir(AUDIO_DIR):
-                file_path = os.path.join(AUDIO_DIR, filename)
-                
-                # Check for files that belong to this app
-                # Pattern: Anki-TTS-Edge_*.mp3
-                # Pattern: *.json (careful check)
-                
-                is_app_file = False
-                if filename.startswith("Anki-TTS-Edge_"):
-                    if filename.endswith(".mp3") or filename.endswith(".json"):
-                        is_app_file = True
-                
-                # Also clean generic timestamp files if they follow the pattern
-                # [basename].timestamps.json from Anki-TTS-Edge_...
-                if filename.endswith(".timestamps.json") and "Anki-TTS-Edge_" in filename:
-                     is_app_file = True
+                file_path = self._resolve_audio_path(filename)
+                is_app_file = (
+                    file_path
+                    and filename.startswith("Anki-TTS-Edge_")
+                    and filename.endswith((".mp3", ".wav", ".json", ".timestamps.json"))
+                )
 
-                if is_app_file:
+                if is_app_file and os.path.isfile(file_path):
                     try:
                         os.remove(file_path)
                         orphan_count += 1
@@ -160,29 +165,31 @@ class HistoryManager:
 
     def _delete_associated_files(self, path):
         """Helper to delete audio file and its metadata (timestamps)"""
-        if not path: return False
+        audio_path = self._resolve_audio_path(path)
+        if not audio_path:
+            return False
         
         success = False
         # Delete Audio
-        if os.path.exists(path):
+        if os.path.isfile(audio_path):
             try:
-                os.remove(path)
+                os.remove(audio_path)
                 success = True
             except Exception as e:
-                print(f"Error removing audio file {path}: {e}")
+                print(f"Error removing audio file {audio_path}: {e}")
         
         # Delete Timestamps if exists 
         # Pattern 1: [filename].json (Old/Standard)
         # Pattern 2: [filename].timestamps.json (New/Observed)
         
-        base_path = os.path.splitext(path)[0]
+        base_path = os.path.splitext(audio_path)[0]
         potential_json_paths = [
             base_path + ".json",
             base_path + ".timestamps.json"
         ]
         
         for json_path in potential_json_paths:
-            if os.path.exists(json_path):
+            if self._is_in_audio_dir(json_path) and os.path.isfile(json_path):
                  try:
                      os.remove(json_path)
                      print(f"DEBUG: Removed metadata: {json_path}")
@@ -190,5 +197,24 @@ class HistoryManager:
                      print(f"Error removing metadata {json_path}: {e}")
                  
         return success
+
+    @staticmethod
+    def _is_in_audio_dir(path):
+        """Return whether a path resolves inside AUDIO_DIR, rejecting traversal and links."""
+        try:
+            audio_root = os.path.realpath(os.path.abspath(AUDIO_DIR))
+            candidate = os.path.realpath(os.path.abspath(path))
+            return os.path.commonpath((audio_root, candidate)) == audio_root
+        except (TypeError, ValueError):
+            return False
+
+    def _resolve_audio_path(self, path):
+        """Resolve legacy absolute or relative history paths without crossing AUDIO_DIR."""
+        if not isinstance(path, (str, os.PathLike)) or not path:
+            return None
+        candidate = os.fspath(path)
+        if not os.path.isabs(candidate):
+            candidate = os.path.join(AUDIO_DIR, candidate)
+        return os.path.abspath(candidate) if self._is_in_audio_dir(candidate) else None
 
 history_manager = HistoryManager()

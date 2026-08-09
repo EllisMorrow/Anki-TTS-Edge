@@ -51,12 +51,14 @@
 ## 3. 持久化规则
 
 - 用户数据统一存储到 `%APPDATA%/Anki-TTS-Edge/`。
+- `voice_settings.json`、`history.json` 和 `voices_cache.json` 必须在目标同目录中写入临时文件，刷新后使用 `os.replace` 原子替换，避免崩溃留下半个 JSON。
 - 只允许以下长期文件存在：
   - `voice_settings.json`
   - `history.json`
   - `voices_cache.json`
   - `logs/monitor_debug.log`
   - `audio/*.mp3`
+  - `audio/*.wav`（本地引擎与点读生成）
   - `audio/*.timestamps.json`
   - `providers/kokoro/manifest.json`（离线引擎清单，可升级）
   - `providers/kokoro/install_state.json`（离线引擎安装状态）
@@ -68,6 +70,9 @@
   - 不能只用秒级时间戳，否则高频连续生成会发生覆盖。
   - 当前实现对相同 `文本 + 声音 + 速率 + 音量 + 音高` 使用稳定缓存键。
   - 相同请求直接命中已生成音频，避免重复走 `edge-tts` 网络生成。
+- 从历史记录删除文件时，真实路径必须仍位于 `audio/` 内；不得信任持久化 JSON 中的绝对路径、`..` 或符号链接。
+- 离线引擎安装包只允许解压普通文件和目录；必须在写入前验证全部成员的路径 containment，并拒绝链接、设备与 FIFO。
+- 离线引擎的下载 URL、资产名和资源布局以随程序发布的 manifest 为信任根；数据目录中的 manifest 仅是副本，不能覆盖内置值。
 
 ## 4. UI / 设置约束
 

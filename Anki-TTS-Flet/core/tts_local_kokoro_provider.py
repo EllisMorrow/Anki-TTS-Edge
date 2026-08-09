@@ -73,6 +73,12 @@ class LocalKokoroProvider(TTSProvider):
                 "engine": self.provider_id,
                 "text": request.text or "",
                 "sid": sid,
+                # sherpa-onnx's Kokoro CLI does not expose Edge-compatible
+                # volume/pitch controls. Keep requested adjustments in the cache
+                # identity so a changed request can never reuse stale audio.
+                "rate": request.rate or "+0%",
+                "volume": request.volume or "+0%",
+                "pitch": request.pitch or "+0Hz",
             },
             ensure_ascii=False,
             sort_keys=True,

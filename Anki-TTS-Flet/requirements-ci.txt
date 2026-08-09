@@ -1,0 +1,3 @@
+# CI uses the production lock file. Keep this indirection so local and CI
+# dependency resolution cannot silently diverge.
+-r requirements.txt

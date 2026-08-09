@@ -1,13 +1,13 @@
 # Anki-TTS-Edge
 
-**[中文文档](https://github.com/msjsc001/Anki-TTS-Edge/blob/master/README.md)**
+**[中文文档](https://github.com/EllisMorrow/Anki-TTS-Edge/blob/master/README.md)**
 
 <div align="center">
 
 Anki-TTS-Edge is a free, high-quality voice generation tool powered by Microsoft Edge TTS. It **quickly generates audio from selected text**, supports dual-voice mode for generating audio with two different voices, and automatically copies the generated audio to clipboard for fast pasting into apps like Anki. It also serves as a **convenient reading tool for language learning and article reading**.
 **Completely rebuilt with Flet (Flutter) in v2.0**, featuring a modern UI, smooth animations, and enhanced functionality.
 
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/msjsc001/Anki-TTS-Edge)](https://github.com/msjsc001/Anki-TTS-Edge/releases/latest) [![GitHub last commit](https://img.shields.io/github/last-commit/msjsc001/Anki-TTS-Edge)](https://github.com/msjsc001/Anki-TTS-Edge/commits/master) [![GitHub All Releases Downloads](https://img.shields.io/github/downloads/msjsc001/Anki-TTS-Edge/total?label=Downloads&color=brightgreen)](https://github.com/msjsc001/Anki-TTS-Edge/releases)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/EllisMorrow/Anki-TTS-Edge)](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest) [![GitHub last commit](https://img.shields.io/github/last-commit/EllisMorrow/Anki-TTS-Edge)](https://github.com/EllisMorrow/Anki-TTS-Edge/commits/master) [![GitHub All Releases Downloads](https://img.shields.io/github/downloads/EllisMorrow/Anki-TTS-Edge/total?label=Downloads&color=brightgreen)](https://github.com/EllisMorrow/Anki-TTS-Edge/releases)
 
 </div>
 
@@ -52,14 +52,14 @@ Anki-TTS-Edge is a free, high-quality voice generation tool powered by Microsoft
 ## 🚀 Installation & Running
 
 ### Requirements
-- Python 3.8+
+- Python 3.10+
 - Windows (Recommended for full feature support like Selection Monitor)
 
 ### Setup
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/msjsc001/Anki-TTS-Edge.git
+   git clone https://github.com/EllisMorrow/Anki-TTS-Edge.git
    cd Anki-TTS-Edge
    ```
 
@@ -69,7 +69,7 @@ Anki-TTS-Edge is a free, high-quality voice generation tool powered by Microsoft
    ```
    *Note: If `requirements.txt` is missing, manually install:*
    ```bash
-   pip install flet==0.28.3 flet-desktop==0.28.3 edge-tts pygame pyperclip pynput pystray pillow pywin32
+   pip install flet==0.28.3 flet-desktop==0.28.3 edge-tts==7.2.8 pygame==2.6.1 pyperclip==1.11.0 pynput==1.8.2 pystray==0.19.5 Pillow==12.3.0 pywin32==312
    ```
 
 3. **Run Application**
@@ -156,13 +156,13 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 ## ⚠️ Disclaimer
 
-This project (Anki-TTS-Edge) is for personal learning, research, and academic exchange purposes only.
+Anki-TTS-Edge is open-source software distributed under the GPL-3.0-only license.
 
-1.  **Non-Commercial Use**: This software is not an official Microsoft product and is based on open-source community code. Any audio files generated using this software are for personal use only and are strictly prohibited for any commercial use or public distribution.
+1.  **Third-party services**: This software is not an official Microsoft product. When using Microsoft Edge TTS or any other third-party service, users must comply with applicable laws and the relevant service terms; those terms do not change this project's GPL-3.0-only software license.
 2.  **No Liability**:
     *   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
     *   **IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.**
     *   Users assume all risks associated with downloading, installing, and using this software.
 3.  **Compliance**: Users must comply with local laws and regulations and Microsoft's relevant terms of service when using this software. Any legal liability arising from violation of laws or terms of service shall be borne solely by the user.
 
-**By downloading or using this software, you agree to all the terms above. If you do not agree, please stop using and delete this software immediately.**
+This section describes third-party service use and liability boundaries only. The GPL-3.0-only in [LICENSE](LICENSE) governs rights to copy, modify, and distribute this software.

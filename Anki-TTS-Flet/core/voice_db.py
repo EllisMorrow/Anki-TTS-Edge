@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 from config.constants import VOICE_CACHE_FILE
 
 def load_voice_cache():
@@ -28,7 +29,19 @@ def save_voice_cache(data):
         # Ensure directory exists
         os.makedirs(os.path.dirname(VOICE_CACHE_FILE), exist_ok=True)
         
-        with open(VOICE_CACHE_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        directory = os.path.dirname(os.path.abspath(VOICE_CACHE_FILE))
+        fd, temporary_path = tempfile.mkstemp(prefix=".voices-", suffix=".tmp", dir=directory)
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temporary_path, VOICE_CACHE_FILE)
+        except Exception:
+            try:
+                os.unlink(temporary_path)
+            except OSError:
+                pass
+            raise
     except Exception as e:
         print(f"Failed to save voice cache: {e}")
