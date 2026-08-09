@@ -11,15 +11,13 @@ Anki-TTS-Edge is a free, high-quality voice generation tool powered by Microsoft
 
 </div>
 
-## 🔄 Latest Stabilization Update (v2.9.2)
+## 🔄 Latest Stabilization Update (v2.9.3)
 
-- **Fix stale playback after voice switching**: Playback cache validation now includes engine + voice/sid + rate/volume/pitch + text, so switching voices will re-generate on the next play.
-- **Offline point-read restored (via re-synthesis)**: When offline Kokoro has no timestamps, the UI still shows a clickable text overlay. Clicking a character/word stops current playback and re-synthesizes the suffix from that position (no history entry, no clipboard MP3 side effects).
-- Offline mode V1 notes: `timestamps` are still empty (no real-time word highlight sync / no millisecond seek). Point-read works via re-synthesis, and very long text will automatically disable the overlay for performance.
-- In offline mode, the voice list shows the official Kokoro voice catalog (sid groups: Chinese (M/F), UK English (F), US English (F)) and includes an "Offline voice demo" link to the official preview page.
-- Engine switching stops playback and clears the current audio state to avoid confusing stale audio with the new engine; it prompts you to re-generate.
-- Edge online failures are surfaced with more diagnosable messages, including a clear locale mismatch hint for the common "Chinese text + non-zh voice" case.
-- Added a busy-state circuit breaker for selection/copy triggered generation to prevent freezes and runaway CPU/memory usage during repeated triggers.
+- **Hardened offline-engine installation**: SHA-256 validation is strict; archive traversal, links, and device entries are rejected; failed downloads remove partial files.
+- **Safer data persistence and cleanup**: Settings, history, and voice cache use atomic writes. History deletion cannot escape the managed audio directory, and deep cleanup now includes local-engine WAV files.
+- **New anti-aliased icon**: Preserves the original blue/green/red circular identity with a 1024px master and nine Windows ICO sizes from 16px through 256px.
+- **Release and maintenance improvements**: Completes GPL-3.0-only and third-party notices, includes licenses in packaged builds, pins direct dependencies, and adds Python 3.10/3.13 Windows CI plus Dependabot.
+- Flet and flet-desktop intentionally remain on 0.28.3 until a dedicated UI and packaging migration is validated.
 
 ## ✨ Key Features
 

@@ -1,6 +1,6 @@
 # 更新日志 / Changelog
 
-## Unreleased
+## v2.9.3 (2026-08-09)
 
 ### 🔧 修复 / Fixes
 
