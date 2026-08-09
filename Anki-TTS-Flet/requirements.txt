@@ -1,4 +1,4 @@
-flet==0.28.3
+flet==0.86.5
 flet-desktop==0.28.3
 edge-tts==7.2.8
 pygame==2.6.1
