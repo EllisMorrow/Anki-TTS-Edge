@@ -1,166 +1,153 @@
 # Anki-TTS-Edge
 
-**[English Documentation](https://github.com/EllisMorrow/Anki-TTS-Edge/blob/master/README-EN.md)**
-
 <div align="center">
 
-Anki-TTS-Edge 是一个基于微软 Edge TTS 技术的免费、高质量语音生成工具，它**能快速的通过划选后生成音频**，开启双音频（双点）模式后能选择两种不同的语音生成音频，生成音频后能自动复制到剪贴板，快速的粘贴到 Anki 之类的软件使用。也能作为**语言学习、文章阅读的便捷朗读工具**使用。
-**全新 v2.0 版本已使用 Flet (Flutter) 框架完全重构**，带来更现代化的 UI、更流畅的动画和更强大的功能体验。
+一款面向 Anki 制卡、语言学习和文章朗读的 Windows 语音生成工具。
+
+支持 Microsoft Edge 在线语音、本地 Kokoro、双声音、划词/复制触发、历史记录和系统托盘。
+
+[English](README-EN.md) · [下载最新版](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest)
 
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/EllisMorrow/Anki-TTS-Edge)](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest) [![GitHub last commit](https://img.shields.io/github/last-commit/EllisMorrow/Anki-TTS-Edge)](https://github.com/EllisMorrow/Anki-TTS-Edge/commits/master) [![GitHub All Releases Downloads](https://img.shields.io/github/downloads/EllisMorrow/Anki-TTS-Edge/total?label=Downloads&color=brightgreen)](https://github.com/EllisMorrow/Anki-TTS-Edge/releases)
 
 </div>
 
-## 🔄 最新稳定化更新（v2.9.3）
-
-- **离线引擎安装链加固**：严格校验 SHA-256，拒绝路径穿越、链接和设备类压缩包成员，下载失败会清理残留文件。
-- **数据安全与清理修复**：设置、历史和声音缓存改为原子写入；历史删除不再允许越出应用音频目录，深度清理现覆盖本地引擎 WAV。
-- **全新抗锯齿图标**：保留原有蓝/绿/红三色圆形识别，新增 1024px 源图及 16–256px 九尺寸 Windows ICO。
-- **发布与维护完善**：补全 GPL-3.0-only 和第三方 NOTICE，发布包携带许可文件，固定直接依赖，并新增 Python 3.10/3.13 Windows CI 与 Dependabot。
-- Flet / flet-desktop 仍稳定保留在 0.28.3，不做未经界面与打包迁移验证的大版本升级。
-
-## ✨ 核心特性
-
-- **全新现代化 UI**：基于 Flet (Flutter) 重构，界面美观、响应迅速，支持深色/浅色主题切换。
-- **海量语音库**：免费集成 300+ 个微软 Edge 神经网络语音，覆盖数十种语言和地区口音。
-- **高亮跟随朗读**：朗读时单词实时高亮，精确同步，支持 "1"->"one" 等复杂符号映射。
-- **即点即读**：朗读模式下，点击文段中任意单词/字符，立即从该位置精确播放。
-- **智能导航**：支持"上一句/下一句"跳转，方便逐句校对学习。
-- **双语音模式**：稳定的双声音槽位配置，可快速在两种不同声音（如一男一女、英音美音）间切换或生成。
-- **历史记录管理**：自动保存生成历史，支持随时回听、删除与清空；深度清理回收孤立文件。
-- **智能监控**：
-  - **复制后生成音频**：复制文本后即可自动生成，并可按设置直接朗读。
-  - **划词单/双语音模式**：(Windows) 划词后通过 `GO / A / B` 快速决定生成方式。
-- **离线语音引擎（可选）**：设置页一键安装/校验/卸载并切换到本地 Kokoro（sidecar 下载，不增加主程序体积）。
-- **贴心功能**：
-  - **系统托盘**：支持最小化到托盘，后台静默运行。
-  - **窗口置顶**：钉在桌面最上层，方便配合 Anki 或浏览器使用。
-  - **多语言界面**：原生支持中文和英文界面，实时切换。
-  - **用户数据集中管理**：所有数据存储在 `%APPDATA%/Anki-TTS-Edge/`，干净整洁。
-
-
-## 📸 界面展示
+## 软件界面
 
 <div align="center">
   <img alt="image" src="https://github.com/user-attachments/assets/b6cef667-c01c-4b27-b00a-fcdd77e0f302" />
 </div>
 
-> *注：全新 Flet 界面，简洁直观*
+> 软件主界面：可选择声音、输入文本、生成和播放音频。
 
-## 🚀 安装与运行
+## 核心功能
 
-### 环境要求
-- Python 3.10 或更高版本
-- Windows 系统 (建议，以获得完整的划词监控支持)
+- **在线与离线双引擎**：默认使用 Microsoft Edge 在线语音，也可安装本地 Kokoro 引擎。
+- **双声音槽位**：声音列表 1 / 2 分别对应 `A / B`，适合对比发音或制作双语音卡片。
+- **划词与复制触发**：可通过复制文本或 Windows 划词快速生成语音。
+- **同步朗读与点读**：在线语音支持时间戳高亮、上一句/下一句和精确跳播；离线语音通过重新合成实现点读。
+- **音频文件到剪贴板**：生成后可将 MP3 文件直接粘贴到 Anki 等应用。
+- **历史记录与清理**：可以回听、删除或清空历史，并回收应用生成的孤立音频。
+- **桌面集成**：支持系统托盘、窗口置顶、自动播放以及深色/浅色主题。
+- **中英文界面**：界面语言可随时切换，设置会自动保存。
 
-### 快速开始
+## 下载与运行
 
-1. **克隆项目**
-   ```bash
-   git clone https://github.com/EllisMorrow/Anki-TTS-Edge.git
-   cd Anki-TTS-Edge
-   ```
+### 方式一：下载 Windows 版本（推荐）
 
-2. **安装依赖**
-   ```bash
-   pip install -r Anki-TTS-Flet/requirements.txt
-   ```
-   *注意：如果尚未生成 requirements.txt，可手动安装核心依赖：*
-   ```bash
-   pip install flet==0.28.3 flet-desktop==0.28.3 edge-tts==7.2.8 pygame==2.6.1 pyperclip==1.11.0 pynput==1.8.2 pystray==0.19.5 Pillow==12.3.0 pywin32==312
-   ```
+1. 打开 [Releases](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest)。
+2. 下载 `Anki-TTS-Edge-v2.9.3-windows-amd64.zip`。
+3. 完整解压 ZIP，然后运行 `Anki-TTS-Edge.exe`。
 
-3. **运行程序**
-   ```bash
-   python Anki-TTS-Flet/main.py
-   ```
+> 请保留解压后的完整文件夹，不要只单独移动 EXE。
 
-## 👨‍💻 开发者指南
+### 方式二：从源码运行
 
-欢迎开发者参与 Anki-TTS-Edge 的开发与定制！以下是项目的核心架构与开发指南：
+环境要求：Windows、Python 3.10 或更高版本。
+
+```powershell
+git clone https://github.com/EllisMorrow/Anki-TTS-Edge.git
+cd Anki-TTS-Edge
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r Anki-TTS-Flet\requirements.txt
+.\.venv\Scripts\python.exe Anki-TTS-Flet\main.py
+```
+
+## 使用方法
+
+1. **选择引擎**：默认使用在线 Edge TTS；需要离线语音时，可在设置中切换到本地 Kokoro。
+2. **选择声音**：单声音使用声音列表 2；双声音模式下，`A` 使用声音列表 1，`B` 使用声音列表 2。
+3. **生成音频**：输入或粘贴文本，然后点击生成按钮。是否自动播放、是否复制 MP3 可在设置中控制。
+4. **复制或划词生成**：启用对应监听选项后，复制文本或在 Windows 中划词，再通过悬浮按钮选择 `GO / A / B`。
+5. **播放与点读**：在线模式可高亮跟随、跳句或点击文本跳播；离线模式点击文本后会从相应位置重新合成。
+6. **管理历史**：在“历史”页回听或删除记录；“清空全部”会同时清理关联音频。
+7. **安装离线引擎**：在“设置 → 语音引擎”中选择离线模式，点击“自动下载并安装”，完成后可重新校验。
+
+用户设置、历史、音频和可选离线引擎统一存放在：
+
+```text
+%APPDATA%/Anki-TTS-Edge/
+```
+
+## v2.9.3 更新内容
+
+- 加固离线引擎的下载、SHA-256 校验、安全解压、manifest 信任边界和卸载范围。
+- 设置、历史和声音缓存改为原子写入；历史删除被限制在应用音频目录内。
+- 深度清理支持本地引擎 WAV，并修正离线缓存身份。
+- 使用全新的抗锯齿三色圆形图标，包含 1024px 源图和九种 Windows ICO 尺寸。
+- 补全 GPL-3.0-only、第三方 NOTICE、依赖固定、Windows CI 和 Dependabot。
+- Flet / flet-desktop 暂时保留在已经验证的 0.28.3，后续大版本需要专项迁移。
+
+完整记录见 [CHANGELOG.md](CHANGELOG.md)。
+
+## 开发与构建
 
 ### 技术栈
-* **UI 框架**: Flet (基于 Flutter 的 Python 现代化 UI 框架)，提供响应式设计和流畅动画。
-* **核心 TTS**: `edge-tts` (微软 Edge 神经网络语音接口的非官方实现)。
-* **音频与多媒体**: `pygame` (提供低延迟、稳定的多线程音频播放机制)。
-* **系统交互**: `pyperclip` (剪贴板监听)、`pystray` / `pillow` (系统托盘驻留)。
-* **异步与并发**: 深度使用 `asyncio` 进行异步 I/O 控制，确保 UI 线程在网络请求和音频生成时绝不卡顿。
 
-### 开发核心技术点解析
-1. **字幕级高亮对齐 (Text-to-Speech Alignment)**
-   利用 `edge-tts` 字典和时间戳，结合 Flet 的 `TextSpan` 和 `TextStyle` 在音频播放回调中动态重绘文本区块背景颜色，达到“卡拉OK”式的精准单词同步。
-2. **全局输入/剪贴板监听器 (Background Monitor)**
-   后台常驻轮询线程自动检测系统剪贴板变化（或光标选中文本）。检测到变化时，立即触发并提升应用窗口 (Bring to Front) 至最顶层，彻底节省了制卡时繁琐的复制粘贴点击步骤。
-3. **音频状态与垃圾回收 (Garbage Collection)**
-   在历史记录管理模块实现了防泄漏的垃圾回收机制，使用哈希和路径跟踪音频和元数据 (.json)；在清理操作时遍历本地真实文件列表以剔除“孤儿”（Orphaned）文件。
-4. **组件化与状态共享设计**
-   UI 被拆分为独立的路由视图 (首页、历史记录、设置)，相互之间通过全局状态管理器或配置注入进行低耦合通信。
+| 模块 | 技术 |
+|---|---|
+| 桌面界面 | Flet / Flutter |
+| 在线语音 | edge-tts |
+| 本地语音 | Kokoro + sherpa-onnx 边车 |
+| 音频播放 | pygame |
+| Windows 集成 | pywin32、pynput、pystray、pyperclip |
+| 图像与托盘 | Pillow |
 
-### 📂 项目结构
+### 项目结构
 
 ```text
 Anki-TTS-Edge/
-├── ARCHITECTURE.md      # 架构决策、运行链路与维护记忆
-├── Anki-TTS-Flet/       # 主程序核心源码目录
-│   ├── assets/          # 图标、本地化翻译文件等静态资源
-│   ├── config/          # 默认配置定义及用户配置读写逻辑
-│   ├── core/            # 业务逻辑大脑 (TTS 引擎操作, 时间戳对齐, 全局监听器, 历史纪录 IO)
-│   ├── ui/              # Flet 页面组件视图 (分模块的UI页面及定制组件)
-│   ├── utils/           # 通用工具函数 (文件操作, 文本格式化等)
-│   └── main.py          # 程序入口与初始化挂载
-├── .gitignore           # Git 忽略文件规则
-└── README.md            # 项目文档
+├── .github/              # CI 与 Dependabot
+├── Anki-TTS-Flet/
+│   ├── assets/           # 图标、翻译和本地引擎 manifest
+│   ├── config/           # 常量与用户设置
+│   ├── core/             # TTS、播放、监听、历史和离线引擎
+│   ├── ui/               # Flet 页面与控件
+│   ├── utils/            # 通用工具
+│   ├── main.py           # 程序入口
+│   └── requirements.txt  # 固定的直接依赖
+├── tests/                # 回归测试
+├── tools/                # 运行时自检工具
+├── Anki-TTS-Edge.spec    # PyInstaller 构建配置
+├── ARCHITECTURE.md       # 架构与维护约束
+└── CHANGELOG.md          # 版本更新记录
 ```
 
-### 🔨 构建可执行文件 (EXE)
+### 构建 Windows 程序
 
-如需针对 Windows 构建独立的可执行程序，我们采用 PyInstaller **文件夹模式 (onedir)** 进行打包：
+项目使用 PyInstaller `onedir` 模式。不要改成 `onefile`，否则会增加启动等待和杀毒软件扫描概率。
 
-> ⚠️ **重要提示**：请勿使用 `--onefile` 模式。单文件模式会导致 Windows 下启动极慢（每次运行时需解压全部文件到临时目录，且容易触发杀毒软件扫描）。
-
-```bash
-# 请确保在虚拟环境中安装了 pyinstaller
-pip install pyinstaller
-
-# 根目录执行以下打包命令（文件夹模式，推荐使用仓库内的 .spec）
+```powershell
+.\.venv\Scripts\python.exe -m pip install pyinstaller
 .\.venv\Scripts\pyinstaller.exe -y --clean Anki-TTS-Edge.spec
 ```
 
-构建完成后，`dist/Anki-TTS-Edge/` 目录即为完整的可发布程序，其中 `Anki-TTS-Edge.exe` 为入口文件。
+构建结果位于 `dist/Anki-TTS-Edge/`，其中 `Anki-TTS-Edge.exe` 是程序入口。发布时必须保留完整目录以及同级的 `LICENSE`、`NOTICE`。
 
-## 📑 使用指南
+### 验证
 
-1. **选择声音**：在首页顶部下拉框选择语言和具体发音人。
-2. **生成音频**：输入或粘贴文本，点击 **蓝色按钮** 开始生成。
-   - **左侧按钮**：使用"语言 (左)"的配置。
-   - **右侧按钮**：使用"语言 (右)"的配置。
-3. **复制文件**：生成中显示绿色，完成后变为红色。点击红点或按 **Ctrl+C** 即可复制音频文件路径（可直接粘贴到 Anki）。
-4. **查看历史**：切换到頂部 **"历史"**页签，查看过往生成记录。
-5. **偏好设置**：在 **"设置"**页签中自定义外观（深色模式）、行为（自动播放、最小化到托盘）等。
-   - 如需离线模式：在“语音引擎”中切换为离线，并点击“自动下载并安装”。安装后可点击“重新校验”确认可用。
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
+.\.venv\Scripts\python.exe tools\flet_runtime_selfcheck.py
+.\.venv\Scripts\python.exe -m compileall -q Anki-TTS-Flet scripts tools
+```
 
----
+更多维护信息：
+
+- [ARCHITECTURE.md](ARCHITECTURE.md)：运行链路、状态边界和安全约束。
+- [MAINTENANCE.md](MAINTENANCE.md)：Python、依赖和 Flet 升级策略。
+- [CHANGELOG.md](CHANGELOG.md)：完整版本记录。
+
+## 许可与第三方服务
+
+Anki-TTS-Edge 按 [GPL-3.0-only](LICENSE) 发布，第三方组件说明见 [NOTICE](NOTICE)。
+
+本软件不是微软官方产品。使用 Microsoft Edge TTS 或其他第三方服务时，用户应遵守适用法律和相应服务条款；第三方服务条款不改变本项目的开源许可证。
+
+本软件按“原样”提供，不附带任何明示或暗示担保。用户应自行评估下载、安装和使用风险。
+
 <div align="center">
+
 Made with ❤️ for Language Learners
+
 </div>
-
----
-
-## 📋 更新日志
-
-详见 [CHANGELOG.md](CHANGELOG.md)
-
----
-
-## ⚠️ 免责声明
-
-本项目（Anki-TTS-Edge）是按 GPL-3.0-only 许可发布的开源软件。
-
-1.  **第三方服务**：本软件并非微软官方产品。使用 Microsoft Edge TTS 或任何其他第三方服务时，用户必须自行遵守适用法律及相关服务条款；该等服务条款不改变本项目的 GPL-3.0-only 软件许可证。
-2.  **免责条款**：
-    *   本软件按“原样”提供，不提供任何形式的明示或暗示担保，包括但不限于适销性、特定用途适用性和非侵权性担保。
-    *   **在任何情况下，开发者（及贡献者）均不对因使用或无法使用本软件而引起的任何直接、间接、偶然、特殊、惩罚性或后果性损害（包括但不限于数据丢失、业务中断、计算机故障等）承担责任，无论这些损害是基于合同、侵权（包括疏忽）或其他法律依据，也无论开发者是否已被告知此类损害的可能性。**
-    *   用户应自行承担下载、安装和使用本软件的所有风险。
-3.  **合规性**：用户在使用本软件时，必须遵守当地法律法规及微软相关服务条款。任何因违反法律法规或服务条款而导致的法律责任，概由用户自行承担。
-
-本节仅说明第三方服务使用与责任边界；软件复制、修改和分发权利以 [LICENSE](LICENSE) 中的 GPL-3.0-only 为准。
