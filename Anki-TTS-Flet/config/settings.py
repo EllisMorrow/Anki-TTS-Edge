@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import tempfile
 from config.constants import (
     SETTINGS_FILE, DEFAULT_MAX_AUDIO_FILES, DEFAULT_VOICE,
     DEFAULT_APPEARANCE_MODE, DEFAULT_CUSTOM_COLOR
@@ -116,8 +117,21 @@ class SettingsManager:
 
     def save_settings(self):
         try:
-            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-                json.dump(self.settings, f, ensure_ascii=False, indent=4)
+            directory = os.path.dirname(os.path.abspath(SETTINGS_FILE))
+            os.makedirs(directory, exist_ok=True)
+            fd, temporary_path = tempfile.mkstemp(prefix=".settings-", suffix=".tmp", dir=directory)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(self.settings, f, ensure_ascii=False, indent=4)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temporary_path, SETTINGS_FILE)
+            except Exception:
+                try:
+                    os.unlink(temporary_path)
+                except OSError:
+                    pass
+                raise
         except Exception as e:
             print(f"Settings save failed: {e}")
 

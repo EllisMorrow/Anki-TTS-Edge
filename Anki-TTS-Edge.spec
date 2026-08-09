@@ -1,4 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
+import shutil
+
 from PyInstaller.utils.hooks import collect_all
 
 datas = [('Anki-TTS-Flet/assets', 'assets')]
@@ -54,3 +57,11 @@ coll = COLLECT(
     upx_exclude=[],
     name='Anki-TTS-Edge',
 )
+
+# PyInstaller 6 places collected data under _internal. Legal notices must also
+# remain visible next to the executable in the distributable onedir package.
+for legal_filename in ('LICENSE', 'NOTICE'):
+    shutil.copy2(
+        os.path.join(SPECPATH, legal_filename),
+        os.path.join(DISTPATH, 'Anki-TTS-Edge', legal_filename),
+    )

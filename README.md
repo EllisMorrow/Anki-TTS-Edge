@@ -1,13 +1,13 @@
 # Anki-TTS-Edge
 
-**[English Documentation](https://github.com/msjsc001/Anki-TTS-Edge/blob/master/README-EN.md)**
+**[English Documentation](https://github.com/EllisMorrow/Anki-TTS-Edge/blob/master/README-EN.md)**
 
 <div align="center">
 
 Anki-TTS-Edge 是一个基于微软 Edge TTS 技术的免费、高质量语音生成工具，它**能快速的通过划选后生成音频**，开启双音频（双点）模式后能选择两种不同的语音生成音频，生成音频后能自动复制到剪贴板，快速的粘贴到 Anki 之类的软件使用。也能作为**语言学习、文章阅读的便捷朗读工具**使用。
 **全新 v2.0 版本已使用 Flet (Flutter) 框架完全重构**，带来更现代化的 UI、更流畅的动画和更强大的功能体验。
 
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/msjsc001/Anki-TTS-Edge)](https://github.com/msjsc001/Anki-TTS-Edge/releases/latest) [![GitHub last commit](https://img.shields.io/github/last-commit/msjsc001/Anki-TTS-Edge)](https://github.com/msjsc001/Anki-TTS-Edge/commits/master) [![GitHub All Releases Downloads](https://img.shields.io/github/downloads/msjsc001/Anki-TTS-Edge/total?label=Downloads&color=brightgreen)](https://github.com/msjsc001/Anki-TTS-Edge/releases)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/EllisMorrow/Anki-TTS-Edge)](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest) [![GitHub last commit](https://img.shields.io/github/last-commit/EllisMorrow/Anki-TTS-Edge)](https://github.com/EllisMorrow/Anki-TTS-Edge/commits/master) [![GitHub All Releases Downloads](https://img.shields.io/github/downloads/EllisMorrow/Anki-TTS-Edge/total?label=Downloads&color=brightgreen)](https://github.com/EllisMorrow/Anki-TTS-Edge/releases)
 
 </div>
 
@@ -52,14 +52,14 @@ Anki-TTS-Edge 是一个基于微软 Edge TTS 技术的免费、高质量语音�
 ## 🚀 安装与运行
 
 ### 环境要求
-- Python 3.8 或更高版本
+- Python 3.10 或更高版本
 - Windows 系统 (建议，以获得完整的划词监控支持)
 
 ### 快速开始
 
 1. **克隆项目**
    ```bash
-   git clone https://github.com/msjsc001/Anki-TTS-Edge.git
+   git clone https://github.com/EllisMorrow/Anki-TTS-Edge.git
    cd Anki-TTS-Edge
    ```
 
@@ -69,7 +69,7 @@ Anki-TTS-Edge 是一个基于微软 Edge TTS 技术的免费、高质量语音�
    ```
    *注意：如果尚未生成 requirements.txt，可手动安装核心依赖：*
    ```bash
-   pip install flet==0.28.3 flet-desktop==0.28.3 edge-tts pygame pyperclip pynput pystray pillow pywin32
+   pip install flet==0.28.3 flet-desktop==0.28.3 edge-tts==7.2.8 pygame==2.6.1 pyperclip==1.11.0 pynput==1.8.2 pystray==0.19.5 Pillow==12.3.0 pywin32==312
    ```
 
 3. **运行程序**
@@ -156,13 +156,13 @@ Made with ❤️ for Language Learners
 
 ## ⚠️ 免责声明
 
-本项目（Anki-TTS-Edge）仅供个人学习、研究和学术交流使用。
+本项目（Anki-TTS-Edge）是按 GPL-3.0-only 许可发布的开源软件。
 
-1.  **非商业用途**：本软件并非微软官方产品，基于开源社区代码修改而来。使用本软件产生的任何音频文件仅限个人使用，严禁用于任何商业用途或公开传播。
+1.  **第三方服务**：本软件并非微软官方产品。使用 Microsoft Edge TTS 或任何其他第三方服务时，用户必须自行遵守适用法律及相关服务条款；该等服务条款不改变本项目的 GPL-3.0-only 软件许可证。
 2.  **免责条款**：
     *   本软件按“原样”提供，不提供任何形式的明示或暗示担保，包括但不限于适销性、特定用途适用性和非侵权性担保。
     *   **在任何情况下，开发者（及贡献者）均不对因使用或无法使用本软件而引起的任何直接、间接、偶然、特殊、惩罚性或后果性损害（包括但不限于数据丢失、业务中断、计算机故障等）承担责任，无论这些损害是基于合同、侵权（包括疏忽）或其他法律依据，也无论开发者是否已被告知此类损害的可能性。**
     *   用户应自行承担下载、安装和使用本软件的所有风险。
 3.  **合规性**：用户在使用本软件时，必须遵守当地法律法规及微软相关服务条款。任何因违反法律法规或服务条款而导致的法律责任，概由用户自行承担。
 
-**下载或使用本软件即表示您已阅读并同意上述所有条款。如果您不同意，请立即停止使用并删除本软件。**
+本节仅说明第三方服务使用与责任边界；软件复制、修改和分发权利以 [LICENSE](LICENSE) 中的 GPL-3.0-only 为准。

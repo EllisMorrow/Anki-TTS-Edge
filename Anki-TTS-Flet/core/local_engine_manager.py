@@ -3,13 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import tarfile
 import time
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from config.constants import ASSETS_DIR, DATA_DIR, ensure_directory
@@ -41,21 +42,31 @@ def _download_file(url: str, dest_path: Path, timeout: float = 60.0) -> None:
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = dest_path.with_suffix(dest_path.suffix + ".part")
 
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Anki-TTS-Edge"},
-        method="GET",
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp, open(tmp_path, "wb") as f:
-        while True:
-            chunk = resp.read(1024 * 1024)
-            if not chunk:
-                break
-            f.write(chunk)
+    try:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Anki-TTS-Edge"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp, open(tmp_path, "wb") as f:
+            while True:
+                chunk = resp.read(1024 * 1024)
+                if not chunk:
+                    break
+                f.write(chunk)
 
-    if dest_path.exists():
-        dest_path.unlink()
-    tmp_path.replace(dest_path)
+        if dest_path.exists():
+            dest_path.unlink()
+        tmp_path.replace(dest_path)
+    except Exception:
+        try:
+            if tmp_path.exists():
+                tmp_path.unlink()
+        except Exception:
+            pass
+        raise
 
 
 def _sha256_file(path: Path) -> str:
@@ -84,22 +95,50 @@ def _parse_checksum_txt(text: str) -> dict[str, str]:
             continue
         filename = parts[0].strip()
         sha256 = parts[1].strip()
-        if filename and sha256 and len(sha256) >= 64:
-            out[filename] = sha256
+        if filename and re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
+            out[filename] = sha256.lower()
     return out
 
 
 def _safe_extract_tar_bz2(archive_path: Path, target_dir: Path) -> None:
     target_dir.mkdir(parents=True, exist_ok=True)
     with tarfile.open(archive_path, mode="r:*") as tf:
+        target_resolved = target_dir.resolve()
+        validated: list[tuple[tarfile.TarInfo, Path]] = []
         for member in tf.getmembers():
             member_name = member.name.replace("\\", "/")
-            if not member_name or member_name.startswith("/"):
+            member_path = PurePosixPath(member_name)
+            parts = member_path.parts
+            if (
+                not member_name
+                or member_path.is_absolute()
+                or ".." in parts
+                or any(":" in part for part in parts)
+            ):
+                raise LocalEngineError(f"unsafe_archive_path:{member.name}")
+            if not (member.isdir() or member.isreg()):
+                raise LocalEngineError(f"unsafe_archive_member:{member.name}")
+
+            dest = (target_resolved / Path(*parts)).resolve()
+            try:
+                common = Path(os.path.commonpath([str(target_resolved), str(dest)]))
+            except ValueError:
+                raise LocalEngineError(f"unsafe_archive_path:{member.name}")
+            if os.path.normcase(str(common)) != os.path.normcase(str(target_resolved)):
+                raise LocalEngineError(f"unsafe_archive_path:{member.name}")
+            validated.append((member, dest))
+
+        # Validate the complete member list before writing anything to disk.
+        for member, dest in validated:
+            if member.isdir():
+                dest.mkdir(parents=True, exist_ok=True)
                 continue
-            dest = (target_dir / member_name).resolve()
-            if not str(dest).startswith(str(target_dir.resolve())):
-                continue
-            tf.extract(member, target_dir)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            source = tf.extractfile(member)
+            if source is None:
+                raise LocalEngineError(f"archive_read_failed:{member.name}")
+            with source, open(dest, "wb") as output:
+                shutil.copyfileobj(source, output)
 
 
 class LocalEngineManager:
@@ -139,12 +178,26 @@ class LocalEngineManager:
             ensure_directory(str(p))
 
     def _clear_dir(self, path: Path) -> None:
-        try:
-            if path.exists():
-                shutil.rmtree(path, ignore_errors=True)
-        except Exception:
-            pass
+        self._require_within_base(path)
+        if path.is_symlink():
+            path.unlink()
+        elif path.exists():
+            shutil.rmtree(path, ignore_errors=False)
         ensure_directory(str(path))
+
+    def _require_within_base(self, path: Path) -> Path:
+        base = self.base_dir.resolve()
+        resolved = path.resolve()
+        try:
+            common = Path(os.path.commonpath([str(base), str(resolved)]))
+        except ValueError:
+            raise LocalEngineError(f"path_outside_base:{path}")
+        if (
+            os.path.normcase(str(common)) != os.path.normcase(str(base))
+            or os.path.normcase(str(resolved)) == os.path.normcase(str(base))
+        ):
+            raise LocalEngineError(f"path_outside_base:{path}")
+        return resolved
 
     def _locate_runtime_exe(self) -> Path | None:
         # The runtime package may contain multiple executables. Prefer the dedicated TTS CLI.
@@ -191,47 +244,17 @@ class LocalEngineManager:
         raise LocalEngineError("missing_default_manifest")
 
     def load_manifest(self) -> dict[str, Any]:
-        def _parse_version_tuple(v: Any) -> tuple[int, ...]:
-            raw = str(v or "").strip()
-            if not raw:
-                return (0,)
-            out: list[int] = []
-            for part in raw.split("."):
-                try:
-                    out.append(int(part))
-                except Exception:
-                    out.append(0)
-            return tuple(out or [0])
-
         default_manifest = self._load_default_manifest()
 
-        current: dict[str, Any] = {}
-        if self.manifest_path.exists():
-            try:
-                with open(self.manifest_path, "r", encoding="utf-8") as f:
-                    loaded = json.load(f)
-                if isinstance(loaded, dict):
-                    current = loaded
-            except Exception:
-                current = {}
-
-        # Auto-upgrade manifest when default version is newer. This keeps existing installs
-        # from being stuck on a bad runtime asset after we update defaults.
-        if _parse_version_tuple(default_manifest.get("version")) > _parse_version_tuple(current.get("version")):
-            current = default_manifest
-
-        # Basic sanity check.
-        if current.get("provider") != default_manifest.get("provider") or not isinstance(current.get("variants"), list):
-            current = default_manifest
-
-        if not self.manifest_path.exists() or current is default_manifest:
-            try:
-                with open(self.manifest_path, "w", encoding="utf-8") as f:
-                    json.dump(current, f, ensure_ascii=False, indent=2)
-            except Exception:
-                pass
-
-        return current
+        # Download URLs, archive names, and resource layout are a trust boundary.
+        # The persisted copy is informational only and must never override the
+        # manifest shipped with the application.
+        try:
+            with open(self.manifest_path, "w", encoding="utf-8") as f:
+                json.dump(default_manifest, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        return default_manifest
 
     def _select_variant(self, manifest: dict[str, Any]) -> dict[str, Any]:
         requested = self._settings.get("local_engine_preferred_variant") or ""
@@ -307,6 +330,10 @@ class LocalEngineManager:
 
     def _ensure_downloaded(self, spec: DownloadSpec) -> tuple[Path, str]:
         expected = self._expected_sha256(spec.checksum_urls, spec.asset_name)
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", expected or ""):
+            raise LocalEngineError("invalid_sha256")
+        if Path(spec.asset_name).name != spec.asset_name or "/" in spec.asset_name or "\\" in spec.asset_name:
+            raise LocalEngineError("invalid_asset_name")
         dest = self.downloads_dir / spec.asset_name
 
         if dest.exists():
@@ -566,19 +593,23 @@ class LocalEngineManager:
 
     def uninstall(self) -> dict[str, Any]:
         errors: list[str] = []
-        for p in [self.runtime_dir, self.model_root_dir, self.cache_dir]:
-            if not p.exists():
-                continue
+        for p in [self.runtime_dir, self.model_root_dir, self.cache_dir, self.downloads_dir]:
             try:
-                shutil.rmtree(p, ignore_errors=False)
+                self._require_within_base(p)
+                if p.is_symlink():
+                    p.unlink()
+                elif p.exists():
+                    shutil.rmtree(p, ignore_errors=False)
             except Exception as ex:
                 errors.append(f"{p.name}:{ex}")
 
-        try:
-            if self.install_state_path.exists():
-                self.install_state_path.unlink()
-        except Exception as ex:
-            errors.append(f"state:{ex}")
+        for label, path in [("state", self.install_state_path), ("manifest", self.manifest_path)]:
+            try:
+                self._require_within_base(path)
+                if path.exists() or path.is_symlink():
+                    path.unlink()
+            except Exception as ex:
+                errors.append(f"{label}:{ex}")
 
         if errors:
             self._mark_not_ready(";".join(errors))

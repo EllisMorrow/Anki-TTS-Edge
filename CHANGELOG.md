@@ -1,5 +1,21 @@
 # 更新日志 / Changelog
 
+## Unreleased
+
+### 🔧 修复 / Fixes
+
+- **本地引擎安装链加固**：下载失败会清理残留 `.part`，SHA-256 必须是严格的 64 位十六进制值；解压前完整验证成员，拒绝路径穿越、绝对路径、链接与设备文件。
+  **Hardened local-engine installation**: Failed downloads remove partial files, SHA-256 values must be exact, and archives are fully validated before extraction to reject traversal, absolute paths, links, and device entries.
+
+- **本地引擎信任与卸载边界**：持久化 manifest 不再能覆盖内置下载地址或文件布局；卸载会清除运行时、模型、缓存、下载和状态，且不允许删除安装根目录之外的路径。
+  **Bounded local-engine trust and uninstall**: Persisted manifests cannot override bundled download sources or layout, and uninstall removes all provider artifacts without deleting outside its install root.
+
+- **用户数据写入与删除安全**：设置、历史和声音缓存改为同目录原子替换；历史删除拒绝音频目录外路径，深度清理同时覆盖应用生成的 WAV。
+  **Safer user-data writes and deletion**: Settings, history, and voice cache use atomic replacement; history deletion is contained to the audio directory, and deep cleanup includes generated WAV files.
+
+- **缓存、许可证与工程维护**：Kokoro 缓存身份现在包含语速、音量和音高；补全 GPL-3.0-only/NOTICE 及发布包携带，固定直接依赖，新增 Windows CI 与 Dependabot，并更新仓库所有者链接。
+  **Cache, licensing, and maintenance**: Kokoro cache identity now includes rate, volume, and pitch; GPL/NOTICE packaging, direct dependency pins, Windows CI, Dependabot, and repository-owner links are corrected.
+
 ## v2.9.2 (2026-03-17)
 
 ### 🔧 修复 / Fixes
