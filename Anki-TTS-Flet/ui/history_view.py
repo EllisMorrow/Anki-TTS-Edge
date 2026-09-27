@@ -18,7 +18,12 @@ class HistoryView(ft.Container):
         self.clear_all_button = ft.TextButton(
             text=i18n.get("history_clear_all"),
             icon=ft.Icons.DELETE_SWEEP,
-            style=ft.ButtonStyle(color=ft.Colors.RED_400),
+            style=ft.ButtonStyle(
+                color=ft.Colors.RED_400,
+                text_style=ft.TextStyle(size=font(14)),
+                icon_size=px(18),
+                padding=ft.padding.symmetric(horizontal=px(12), vertical=px(8)),
+            ),
             on_click=self._on_clear_all
         )
         
@@ -34,13 +39,24 @@ class HistoryView(ft.Container):
         # Dialog
         self.confirm_dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text(i18n.get("history_clear_confirm_title", "Confirm Clear")),
-            content=ft.Text(i18n.get("history_clear_confirm_msg", "Delete all history?")),
+            title=ft.Text(i18n.get("history_clear_confirm_title", "Confirm Clear"), size=font(20)),
+            content=ft.Text(i18n.get("history_clear_confirm_msg", "Delete all history?"), size=font(14)),
             actions=[
-                ft.TextButton(text=i18n.get("dialog_cancel", "Cancel"), on_click=self._close_dialog),
-                ft.TextButton(text=i18n.get("dialog_confirm", "Yes"), on_click=self._confirm_clear),
+                ft.TextButton(
+                    text=i18n.get("dialog_cancel", "Cancel"),
+                    style=ft.ButtonStyle(text_style=ft.TextStyle(size=font(14))),
+                    on_click=self._close_dialog,
+                ),
+                ft.TextButton(
+                    text=i18n.get("dialog_confirm", "Yes"),
+                    style=ft.ButtonStyle(text_style=ft.TextStyle(size=font(14))),
+                    on_click=self._confirm_clear,
+                ),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
+            title_padding=ft.padding.only(left=px(24), top=px(24), right=px(24)),
+            content_padding=ft.padding.symmetric(horizontal=px(24), vertical=px(16)),
+            actions_padding=px(8),
         )
 
         # List
@@ -51,7 +67,7 @@ class HistoryView(ft.Container):
             alignment=ft.MainAxisAlignment.START,
             controls=[
                 self.header,
-                ft.Divider(),
+                ft.Divider(height=px(16)),
                 self.history_list
             ]
         )
@@ -70,7 +86,7 @@ class HistoryView(ft.Container):
         self.history_list.controls.clear()
         
         if not records:
-            self.history_list.controls.append(ft.Text(i18n.get("history_empty"), italic=True))
+            self.history_list.controls.append(ft.Text(i18n.get("history_empty"), italic=True, size=self.ui_scale.font(14)))
             self._safe_update()
             return
 
@@ -91,12 +107,22 @@ class HistoryView(ft.Container):
                     ft.TextButton(
                         text=i18n.get("control_play_pause", "播放"),
                         icon=ft.Icons.PLAY_ARROW,
+                        style=ft.ButtonStyle(
+                            text_style=ft.TextStyle(size=self.ui_scale.font(14)),
+                            icon_size=self.ui_scale.px(18),
+                            padding=ft.padding.symmetric(horizontal=self.ui_scale.px(12), vertical=self.ui_scale.px(8)),
+                        ),
                         on_click=lambda e, r=rec: self._play_audio(r),
                     ),
                     ft.TextButton(
                         text=i18n.get("history_rec_delete", "删除"),
                         icon=ft.Icons.DELETE,
-                        style=ft.ButtonStyle(color=ft.Colors.RED_400),
+                        style=ft.ButtonStyle(
+                            color=ft.Colors.RED_400,
+                            text_style=ft.TextStyle(size=self.ui_scale.font(14)),
+                            icon_size=self.ui_scale.px(18),
+                            padding=ft.padding.symmetric(horizontal=self.ui_scale.px(12), vertical=self.ui_scale.px(8)),
+                        ),
                         on_click=lambda e, r=rec: self._delete_item(r),
                     ),
                 ],
@@ -107,7 +133,7 @@ class HistoryView(ft.Container):
             tile = ft.Container(
                 content=ft.Row(
                     [
-                        ft.Icon(ft.Icons.AUDIO_FILE, color=ft.Colors.INDIGO),
+                        ft.Icon(ft.Icons.AUDIO_FILE, color=ft.Colors.INDIGO, size=self.ui_scale.px(24)),
                         ft.Column(
                             [
                                 ft.Text(text_preview, weight="bold", size=self.ui_scale.font(14)),

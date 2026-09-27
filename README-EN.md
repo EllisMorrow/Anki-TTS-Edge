@@ -37,7 +37,7 @@ Supports Microsoft Edge online voices, Local Kokoro, dual voices, selection/copy
 ### Option 1: Download the Windows package (recommended)
 
 1. Open the [latest Release](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest).
-2. Download `Anki-TTS-Edge-v2.9.6-windows-amd64.zip`.
+2. Download `Anki-TTS-Edge-v2.9.7-windows-amd64.zip`.
 3. Extract the complete ZIP, then run `Anki-TTS-Edge.exe`.
 
 > Keep the extracted folder together. Do not move only the EXE.
@@ -71,10 +71,10 @@ User settings, history, audio, and the optional offline engine are stored under:
 %APPDATA%/Anki-TTS-Edge/
 ```
 
-## What's New in v2.9.6
+## What's New in v2.9.7
 
-- Voice lists 1 and 2 center the selected voice after restarting or returning to the Voice page.
-- Hover over a voice to show a star, then click to save or remove it from favorites. Favorites persist locally; voices no longer supported by Microsoft are removed from the list and favorites.
+- Interface scaling now resizes switches, dropdowns, text fields, buttons, sliders, and voice-list controls together, fixing oversized controls at low scale settings.
+- The custom `30%` to `200%` range is unchanged; Windows still controls the native title bar.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full history.
 

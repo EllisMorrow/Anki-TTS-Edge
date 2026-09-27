@@ -116,11 +116,47 @@ async def main(page: ft.Page):
         else ft.VisualDensity.STANDARD
     )
 
+    def scaled_control_themes():
+        # Keep the native Material geometry exactly as before at 100%.
+        if ui_scale.percent == 100:
+            return {}
+
+        button_size = ft.Size(px(64), px(40))
+        button_padding = ft.padding.symmetric(horizontal=px(24), vertical=px(8))
+        button_geometry = dict(
+            minimum_size=button_size,
+            padding=button_padding,
+            visual_density=ft.VisualDensity.STANDARD,
+        )
+        return dict(
+            elevated_button_theme=ft.ElevatedButtonTheme(**button_geometry),
+            outlined_button_theme=ft.OutlinedButtonTheme(**button_geometry),
+            filled_button_theme=ft.FilledButtonTheme(**button_geometry),
+            text_button_theme=ft.TextButtonTheme(
+                minimum_size=button_size,
+                padding=ft.padding.symmetric(horizontal=px(12), vertical=px(8)),
+                visual_density=ft.VisualDensity.STANDARD,
+            ),
+            icon_button_theme=ft.IconButtonTheme(
+                icon_size=px(24),
+                fixed_size=ft.Size(px(48), px(48)),
+                padding=px(8),
+                visual_density=ft.VisualDensity.STANDARD,
+            ),
+            slider_theme=ft.SliderTheme(
+                track_height=px(4),
+                thumb_size=ft.Size(px(20), px(20)),
+                padding=ft.padding.symmetric(horizontal=px(24), vertical=px(14)),
+                year_2023=False,
+            ),
+        )
+
     page.theme = ft.Theme(
         color_scheme_seed="#475569",
         text_theme=create_scaled_text_theme("#1E293B"),
         icon_theme=ft.IconTheme(size=px(24)),
         visual_density=visual_density,
+        **scaled_control_themes(),
         color_scheme=create_compatible_color_scheme(
             primary="#475569",                   # Slate-600: neutral, professional
             on_primary="#FFFFFF",
@@ -139,6 +175,7 @@ async def main(page: ft.Page):
         text_theme=create_scaled_text_theme("#E2E8F0"),
         icon_theme=ft.IconTheme(size=px(24)),
         visual_density=visual_density,
+        **scaled_control_themes(),
         color_scheme=create_compatible_color_scheme(
             primary="#94A3B8",                    # Slate-400
             on_primary="#0F172A",                 # Slate-900

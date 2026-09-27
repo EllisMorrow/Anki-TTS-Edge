@@ -56,7 +56,10 @@ class UiScaleTests(unittest.TestCase):
         self.assertEqual(settings.ui_scale_input.suffix_text, "%")
 
         minimum_settings = SettingsView(dummy_page(), UiScale(MIN_UI_SCALE_PERCENT))
-        self.assertEqual(minimum_settings.ui_scale_input.width, 90)
+        self.assertEqual(
+            minimum_settings.ui_scale_input.width,
+            minimum_settings.ui_scale.px(120),
+        )
 
     def test_settings_accepts_and_saves_a_custom_scale(self):
         settings = SettingsView(dummy_page())
@@ -203,10 +206,47 @@ class UiScaleTests(unittest.TestCase):
                 row = home.list_left.controls[1]
                 self.assertEqual(home.list_left.item_extent, home._voice_row_extent)
                 self.assertEqual(row.height, home._voice_row_extent)
-                self.assertGreaterEqual(row.height, 54)
+                self.assertEqual(row.height, home.ui_scale.px(54))
                 self.assertEqual(row.content.title.overflow, ft.TextOverflow.ELLIPSIS)
                 star = home._favorite_buttons["edge_online:" + "long-voice-name" * 10][0][0]
                 self.assertLess(star.icon_size, row.height)
+
+    def test_native_control_geometry_tracks_ui_scale(self):
+        compact = UiScale(MIN_UI_SCALE_PERCENT)
+        home = HomeView(dummy_page(), compact)
+        settings = SettingsView(dummy_page(), compact)
+
+        self.assertEqual(home.btn_replay.width, compact.px(40))
+        self.assertEqual(home.btn_replay.height, compact.px(40))
+        self.assertEqual(home.btn_replay.icon_size, compact.px(20))
+        self.assertEqual(home.lang_dropdown_left.height, compact.px(56))
+        self.assertEqual(home.lang_dropdown_left.select_icon_size, compact.px(24))
+        self.assertTrue(home.lang_dropdown_left.dense)
+
+        home.populate_voices([{"name": "zh-test", "lang": "zh-CN", "region": "CN"}])
+        voice_tile = home.list_left.controls[1].content
+        self.assertEqual(voice_tile.leading.size, compact.px(24))
+        self.assertEqual(voice_tile.min_height, compact.px(48))
+        self.assertEqual(voice_tile.min_leading_width, compact.px(40))
+
+        self.assertEqual(settings.theme_switch.scale.scale, compact.factor)
+        self.assertIsNone(settings.theme_switch.label)
+        self.assertEqual(settings.ui_scale_input.height, compact.px(56))
+        self.assertEqual(settings.reset_size_button.height, compact.px(40))
+        self.assertTrue(settings.language_dropdown.dense)
+        self.assertEqual(settings.language_dropdown.height, compact.px(56))
+        self.assertEqual(settings.language_dropdown.select_icon_size, compact.px(24))
+
+    def test_scaled_switch_label_preserves_toggle_behavior(self):
+        settings = SettingsView(dummy_page(), UiScale(MIN_UI_SCALE_PERCENT))
+        saved_settings = []
+        settings.on_save_settings = saved_settings.append
+        label = settings._switch_label_texts[id(settings.autoplay_switch)]
+
+        label.on_tap(None)
+
+        self.assertFalse(settings.autoplay_switch.value)
+        self.assertFalse(saved_settings[-1]["autoplay_enabled"])
 
     def test_filter_keeps_language_when_selected_voice_is_elsewhere(self):
         home = HomeView(dummy_page())

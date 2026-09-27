@@ -36,7 +36,7 @@
 ### 方式一：下载 Windows 版本（推荐）
 
 1. 打开 [Releases](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest)。
-2. 下载 `Anki-TTS-Edge-v2.9.6-windows-amd64.zip`。
+2. 下载 `Anki-TTS-Edge-v2.9.7-windows-amd64.zip`。
 3. 完整解压 ZIP，然后运行 `Anki-TTS-Edge.exe`。
 
 > 请保留解压后的完整文件夹，不要只单独移动 EXE。
@@ -70,10 +70,10 @@ python -m venv .venv
 %APPDATA%/Anki-TTS-Edge/
 ```
 
-## v2.9.6 更新内容
+## v2.9.7 更新内容
 
-- 声音列表 1、2 在重启或离开声音页后返回时，自动将已选声音显示在列表中央。
-- 鼠标悬停声音时可点击星标收藏；再次点击可取消。收藏会保存在本机设置中，不再受微软支持的声音会从列表和收藏中移除。
+- 界面缩放现会同步调整开关、下拉框、输入框、按钮、滑块及声音列表中的控件尺寸，解决低缩放比例下只有文字变小的问题。
+- `30%` 至 `200%` 的自定义缩放范围保持不变；Windows 原生标题栏仍由系统控制。
 
 完整记录见 [CHANGELOG.md](CHANGELOG.md)。
 
