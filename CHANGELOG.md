@@ -1,5 +1,17 @@
 # 更新日志 / Changelog
 
+## v2.9.6 (2026-09-27)
+
+### ✨ 新功能 / Features
+
+- **声音收藏**：声音列表 1、2 共用本地收藏记录；悬停时显示星标，点击收藏或取消收藏。经微软声音目录确认不再提供的声音会从列表与收藏中移除。
+  **Voice favorites**: Both voice lists share locally saved favorites. A star appears on hover and toggles the favorite. Voices confirmed absent from Microsoft's catalog are removed from the lists and favorites.
+
+### 🔧 修复 / Fixes
+
+- **已选声音定位**：重启或切回声音页时，两列分别将已选声音居中显示，靠近列表首尾的声音也可居中。
+  **Selected voice position**: After a restart or returning to the Voice page, each list centers its selected voice, including voices near either end.
+
 ## v2.9.5 (2026-09-09)
 
 ### ✨ 新功能 / Features

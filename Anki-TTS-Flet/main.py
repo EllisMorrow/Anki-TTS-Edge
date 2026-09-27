@@ -173,6 +173,14 @@ async def main(page: ft.Page):
     # 2. Top Navigation
     # Create views first so we can switch them in place.
     home_view = HomeView(page, ui_scale)
+    home_view.set_favorites(settings_manager.get_voice_favorites())
+
+    def handle_favorite_toggled(key: str, is_favorite: bool):
+        if not settings_manager.set_voice_favorite_key(key, is_favorite):
+            home_view.set_favorites(settings_manager.get_voice_favorites())
+            show_message(i18n.get("voice_favorite_save_failed"), True)
+
+    home_view.on_favorite_toggled = handle_favorite_toggled
     history_view = HistoryView(page, ui_scale)
     settings_view = SettingsView(page, ui_scale)
     home_view.set_compact_height_layout(saved_height / ui_scale.factor < 700)
@@ -221,6 +229,8 @@ async def main(page: ft.Page):
         if should_update:
             navigation_bar.update()
             view_host.update()
+            if index == 0:
+                home_view.focus_selected_voices()
 
     for index, spec in enumerate(tab_specs):
         spec["icon_control"] = ft.Icon(spec["icon"], size=px(18))
@@ -472,6 +482,44 @@ async def main(page: ft.Page):
     def voice_signature(voices):
         return tuple(v.get("name") for v in voices or [])
 
+    def reconcile_edge_catalog(voices):
+        """Update saved favorites and selections after a valid online catalog arrives."""
+        if not settings_manager.reconcile_edge_favorites(voices):
+            show_message(i18n.get("voice_favorite_save_failed"), True)
+        home_view.set_favorites(settings_manager.get_voice_favorites())
+
+        available = {voice["name"] for voice in voices}
+        changed = {}
+        for side in ("left", "right"):
+            setting_key = f"selected_voice_{side}"
+            previous = settings_manager.get(setting_key)
+            if isinstance(previous, str) and previous in available:
+                continue
+
+            selected = previous if isinstance(previous, str) else ""
+            locale_match = re.search(r"\(([a-z]{2,3}-[^,]+),", selected)
+            locale = locale_match.group(1) if locale_match else None
+            language = locale.split("-", 1)[0] if locale else ("zh" if side == "left" else "en")
+            replacement = next(
+                (voice["name"] for voice in voices if locale and f"({locale}," in voice["name"]),
+                None,
+            ) or next(
+                (voice["name"] for voice in voices if voice["lang"] == language),
+                None,
+            ) or (DEFAULT_VOICE if DEFAULT_VOICE in available else voices[0]["name"])
+            changed[setting_key] = previous
+            settings_manager.set(setting_key, replacement)
+
+        if not changed:
+            return False
+        if not settings_manager.save_settings():
+            for setting_key, previous in changed.items():
+                settings_manager.set(setting_key, previous)
+            show_message(i18n.get("voice_selection_save_failed"), True)
+            return False
+        show_message(i18n.get("voice_selection_unavailable"))
+        return True
+
     # Background refresh: check network for updates
     async def background_voice_refresh():
         try:
@@ -483,12 +531,20 @@ async def main(page: ft.Page):
             current_voices = edge_voice_state["current"]
             
             # Compare with current (cache was already shown)
-            if fresh_voices and voice_signature(fresh_voices) != voice_signature(current_voices):
+            if not fresh_voices:
+                return
+            selection_changed = reconcile_edge_catalog(fresh_voices)
+            if voice_signature(fresh_voices) != voice_signature(current_voices):
                 print(f"DEBUG: Voice list updated in background ({len(current_voices)} -> {len(fresh_voices)})")
                 edge_voice_state["current"] = fresh_voices
                 if (settings_manager.get("tts_engine", "edge_online") or "edge_online") == "edge_online":
-                    home_view.populate_voices(fresh_voices)
+                    home_view.populate_voices(fresh_voices, locate_selected=False)
                     page.update()
+            if selection_changed and (settings_manager.get("tts_engine", "edge_online") or "edge_online") == "edge_online":
+                home_view.set_selections(
+                    settings_manager.get("selected_voice_left"),
+                    settings_manager.get("selected_voice_right"),
+                )
         except Exception as e:
             print(f"DEBUG: Background voice refresh failed: {e}")
 
@@ -501,6 +557,7 @@ async def main(page: ft.Page):
                 home_view.populate_voices(kokoro_voice_catalog)
                 home_view.set_status("", None, None)
                 page.update()
+                home_view.focus_selected_voices()
                 return
 
             cached_voices = get_cached_voices()
@@ -513,10 +570,18 @@ async def main(page: ft.Page):
                 page.update()
                 voices = await fetch_voices_from_network()
 
+            if voices and not cached_voices:
+                selection_changed = reconcile_edge_catalog(voices)
+                if selection_changed:
+                    home_view.set_selections(
+                        settings_manager.get("selected_voice_left"),
+                        settings_manager.get("selected_voice_right"),
+                    )
             edge_voice_state["current"] = voices
             home_view.populate_voices(voices)
             home_view.set_status("", None, None)
             page.update()
+            home_view.focus_selected_voices()
 
             if edge_voice_state["loaded_from_cache"]:
                 asyncio.create_task(background_voice_refresh())

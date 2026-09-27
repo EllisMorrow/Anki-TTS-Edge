@@ -2,6 +2,7 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -79,7 +80,7 @@ class UiScaleTests(unittest.TestCase):
         )
 
         left_region_chip = home.region_nav_left.controls[0]
-        left_voice_tile = home.list_left.controls[1]
+        left_voice_tile = home.list_left.controls[1].content
         self.assertEqual(left_region_chip.content.size, scale.font(11))
         self.assertEqual(left_voice_tile.title.size, scale.font(14))
 
@@ -112,6 +113,118 @@ class UiScaleTests(unittest.TestCase):
         self.assertEqual(history_card.padding, scale.px(10))
         self.assertEqual(text_column.controls[0].size, scale.font(14))
         self.assertEqual(text_column.controls[1].size, scale.font(12))
+
+    def test_voice_favorites_are_shared_without_selecting_a_voice(self):
+        home = HomeView(dummy_page())
+        home.populate_voices([
+            {"name": "zh-test", "lang": "zh-CN", "region": "CN"},
+        ])
+        callback = Mock()
+        home.on_favorite_toggled = callback
+        home.on_voice_selected = Mock()
+        key = "edge_online:zh-test"
+        left_button = home._favorite_buttons[key][0][0]
+        right_button = home._favorite_buttons[key][1][0]
+        self.assertFalse(left_button.visible)
+        left_row = home.list_left.controls[1]
+        left_row.on_hover(SimpleNamespace(data="true"))
+        self.assertTrue(left_button.visible)
+        self.assertFalse(right_button.visible)
+        left_row.on_hover(SimpleNamespace(data="false"))
+        self.assertFalse(left_button.visible)
+        left_button.on_click(None)
+        callback.assert_called_once_with(key, True)
+        home.on_voice_selected.assert_not_called()
+        self.assertEqual(left_button.icon, ft.Icons.STAR)
+        self.assertEqual(right_button.icon, ft.Icons.STAR)
+        self.assertTrue(left_button.visible)
+        self.assertTrue(right_button.visible)
+        home._on_filter_change("left")
+        right_button_after_left_refresh = home._favorite_buttons[key][0][0]
+        left_button_after_refresh = home._favorite_buttons[key][1][0]
+        self.assertIs(right_button_after_left_refresh, right_button)
+        right_button.on_click(None)
+        self.assertNotIn(key, home._favorite_keys)
+        self.assertFalse(left_button_after_refresh.visible)
+        self.assertFalse(right_button.visible)
+
+    def test_voice_scroll_restores_saved_offset_or_locates_selected_voice(self):
+        home = HomeView(dummy_page())
+        voices = [
+            {"name": f"zh-{index}", "lang": "zh-CN", "region": "CN"}
+            for index in range(10)
+        ]
+        home.populate_voices(voices)
+        home.list_left.on_scroll(SimpleNamespace(pixels=73.0))
+        home.list_right.on_scroll(SimpleNamespace(pixels=29.0))
+        self.assertEqual(home._voice_scroll_offsets, {"left": 73.0, "right": 29.0})
+        home._is_mounted = lambda: True
+        home._safe_update = lambda *controls: home._voice_scroll_offsets.update(left=0, right=0)
+        home.list_left.scroll_to = Mock()
+        home.list_right.scroll_to = Mock()
+
+        home.set_selections("zh-4", "zh-1")
+        home.list_left.scroll_to.assert_called_with(offset=1, duration=0)
+        home.list_right.scroll_to.assert_called_with(offset=1, duration=0)
+        viewport = home._voice_row_extent * 5
+        home.list_left.on_scroll(SimpleNamespace(pixels=1.0, viewport_dimension=viewport))
+        home.list_right.on_scroll(SimpleNamespace(pixels=1.0, viewport_dimension=viewport))
+        self.assertFalse(home._voice_focus_pending["left"])
+        self.assertFalse(home._voice_focus_pending["right"])
+        self.assertEqual(home._selected_voice_indices, {"left": 5, "right": 2})
+        edge_padding = (viewport - home._voice_row_extent) / 2
+        self.assertEqual(home.list_left.padding.top, edge_padding)
+        self.assertEqual(home.list_right.padding.bottom, edge_padding)
+        self.assertEqual(home.list_left.scroll_to.call_args.kwargs["offset"], home._voice_row_extent * 5)
+
+        home.list_left.scroll_to.reset_mock()
+        home.list_right.scroll_to.reset_mock()
+        home._voice_scroll_offsets = {"left": 73.0, "right": 29.0}
+        home.set_selections("zh-0", "zh-9")
+        home.list_left.scroll_to.assert_called_with(offset=73.0, duration=0)
+        home.list_right.scroll_to.assert_called_with(offset=29.0, duration=0)
+
+        home.focus_selected_voices()
+        home.list_left.scroll_to.assert_called_with(offset=home._voice_row_extent, duration=0)
+        max_offset = len(home.list_right.controls) * home._voice_row_extent + 2 * edge_padding - viewport
+        home.list_right.scroll_to.assert_called_with(offset=max_offset, duration=0)
+
+    def test_kokoro_favorite_key_uses_catalog_version_and_sid(self):
+        self.assertEqual(
+            HomeView._favorite_key({"name": "voice", "sid": 12}),
+            "local_kokoro:v1_1:12",
+        )
+
+    def test_voice_rows_have_fixed_extent_at_supported_ui_scales(self):
+        for percent in (MIN_UI_SCALE_PERCENT, 100, MAX_UI_SCALE_PERCENT):
+            with self.subTest(percent=percent):
+                home = HomeView(dummy_page(), UiScale(percent))
+                home.populate_voices([{"name": "long-voice-name" * 10, "lang": "zh-CN", "region": "CN"}])
+                row = home.list_left.controls[1]
+                self.assertEqual(home.list_left.item_extent, home._voice_row_extent)
+                self.assertEqual(row.height, home._voice_row_extent)
+                self.assertGreaterEqual(row.height, 54)
+                self.assertEqual(row.content.title.overflow, ft.TextOverflow.ELLIPSIS)
+                star = home._favorite_buttons["edge_online:" + "long-voice-name" * 10][0][0]
+                self.assertLess(star.icon_size, row.height)
+
+    def test_filter_keeps_language_when_selected_voice_is_elsewhere(self):
+        home = HomeView(dummy_page())
+        home.populate_voices([
+            {"name": "zh-test", "lang": "zh-CN", "region": "CN"},
+            {"name": "en-test", "lang": "en-US", "region": "US"},
+        ])
+        home.set_selections("en-test", "en-test")
+        self.assertEqual(home.lang_dropdown_left.value, "zh-CN")
+        self.assertEqual(len(home.list_left.controls), 2)
+        self.assertEqual(home.list_left.controls[1].content.data["name"], "zh-test")
+        home._is_mounted = lambda: True
+        home.list_left.scroll_to = Mock()
+        home.list_right.scroll_to = Mock()
+        home.focus_selected_voices()
+        home.list_left.scroll_to.assert_not_called()
+        home.list_right.scroll_to.assert_called_once_with(offset=1, duration=0)
+        self.assertEqual(home.list_left.padding, home._voice_list_padding)
 
     def test_short_window_layout_keeps_voice_area_in_scrollable_content(self):
         scale = UiScale(80)
