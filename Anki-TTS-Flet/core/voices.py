@@ -13,24 +13,37 @@ def get_cached_voices():
     return None
 
 async def fetch_voices_from_network():
-    """Fetch voices from network and update cache"""
+    """Fetch a complete, valid voice catalog and update the cache."""
     try:
         voices = await VoicesManager.create()
         raw_list = voices.find()
-        
-        pattern = re.compile(r"^Microsoft Server Speech Text to Speech Voice \(([a-z]{2,3})-([A-Z]{2,}(?:-[A-Za-z]+)?), (.*Neural)\)$")
+
+        if not isinstance(raw_list, list) or not raw_list:
+            return []
+        pattern = re.compile(
+            r"^Microsoft Server Speech Text to Speech Voice \(([a-z]{2,3})-"
+            r"((?:[A-Z][a-z]{3}-)?(?:[A-Z]{2}|[0-9]{3})(?:-[A-Za-z]+)?), (.*Neural)\)$"
+        )
         processed_list = []
-        
+
         for v in raw_list:
-            match = pattern.match(v['Name'])
-            if match:
-                lang, region, name_part = match.groups()
-                processed_list.append({
-                    "name": v['Name'],
-                    "lang": lang,
-                    "region": region,
-                    "display_name": name_part
-                })
+            if not isinstance(v, dict) or not isinstance(v.get("Name"), str):
+                return []
+            match = pattern.fullmatch(v["Name"])
+            if not match:
+                # A changed API format may have yielded a partial visible list.
+                # Keep the last good cache and favorites until it can be checked.
+                return []
+            lang, region, name_part = match.groups()
+            processed_list.append({
+                "name": v["Name"],
+                "lang": lang,
+                "region": region,
+                "display_name": name_part
+            })
+
+        if len({voice["name"] for voice in processed_list}) != len(processed_list):
+            return []
         
         processed_list.sort(key=lambda x: (x['lang'], x['region'], x['name']))
         

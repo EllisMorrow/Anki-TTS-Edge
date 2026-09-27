@@ -138,8 +138,30 @@ class HomeView(ft.Container):
         
         # 3. Voice Lists (Dual Column)
         # Using ListView for efficient scrolling
-        self.list_left = ft.ListView(expand=True, spacing=px(2), padding=px(10), auto_scroll=False)
-        self.list_right = ft.ListView(expand=True, spacing=px(2), padding=px(10), auto_scroll=False)
+        self._voice_row_extent = max(px(54), 54)
+        self._voice_list_padding = px(10)
+        self._voice_edge_padding = {"left": self._voice_list_padding, "right": self._voice_list_padding}
+        self._voice_scroll_offsets = {"left": 0.0, "right": 0.0}
+        self._voice_viewport_heights = {"left": None, "right": None}
+        self._voice_focus_pending = {"left": False, "right": False}
+        self._selected_voice_indices = {"left": None, "right": None}
+        self._voice_selection_initialized = False
+        self._favorite_keys = set()
+        self._favorite_buttons = {}
+        self.list_left = ft.ListView(
+            expand=True, item_extent=self._voice_row_extent,
+            padding=self._voice_list_padding, auto_scroll=False,
+            build_controls_on_demand=False,
+            on_scroll_interval=0,
+            on_scroll=lambda e: self._remember_voice_scroll("left", e),
+        )
+        self.list_right = ft.ListView(
+            expand=True, item_extent=self._voice_row_extent,
+            padding=self._voice_list_padding, auto_scroll=False,
+            build_controls_on_demand=False,
+            on_scroll_interval=0,
+            on_scroll=lambda e: self._remember_voice_scroll("right", e),
+        )
         
         # Region navigation (auto-wrap instead of scroll)
         self.region_nav_left = ft.Row(
@@ -379,6 +401,8 @@ class HomeView(ft.Container):
 
     def set_compact_height_layout(self, enabled: bool):
         """Keep all home-page actions reachable in short windows."""
+        if hasattr(self, "_voice_viewport_heights"):
+            self._voice_viewport_heights = {"left": None, "right": None}
         enabled = bool(enabled)
         if getattr(self, "_compact_height_layout", None) == enabled:
             return
@@ -495,6 +519,9 @@ class HomeView(ft.Container):
     # --- Methods to Populate Data (To be called by Controller) ---
     def set_tts_engine(self, engine_id: str):
         engine_id = (engine_id or "edge_online").strip() or "edge_online"
+        if engine_id != self._tts_engine_id:
+            self._voice_scroll_offsets = {"left": 0.0, "right": 0.0}
+            self._voice_viewport_heights = {"left": None, "right": None}
         self._tts_engine_id = engine_id
         is_offline = engine_id == "local_kokoro"
 
@@ -546,13 +573,106 @@ class HomeView(ft.Container):
         self._safe_update(self.btn_gen_b)
 
     def set_selections(self, left, right):
+        first_selection = not self._voice_selection_initialized
+        self._voice_selection_initialized = True
         self.selected_voice_left = left
         self.selected_voice_right = right
         if hasattr(self, 'all_voices_data'):
             # Refresh both sides
-            self._render_voices(self.all_voices_data)
+            self._render_voices(self.all_voices_data, locate_selected=first_selection)
 
-    def populate_voices(self, voice_list, side='both'):
+    @staticmethod
+    def _favorite_key(item):
+        if item.get("sid") is not None:
+            try:
+                return f"local_kokoro:v1_1:{int(item['sid'])}"
+            except (TypeError, ValueError):
+                return None
+        name = item.get("name")
+        return f"edge_online:{name}" if name else None
+
+    def set_favorites(self, keys):
+        """Set the shared favorite keys used by both voice lists."""
+        self._favorite_keys = set(keys or ())
+        self._refresh_favorite_buttons()
+
+    def _refresh_favorite_buttons(self, keys=None):
+        for key in keys if keys is not None else self._favorite_buttons:
+            favorite = key in self._favorite_keys
+            for button, hovered, _side in self._favorite_buttons.get(key, ()):
+                button.icon = ft.Icons.STAR if favorite else ft.Icons.STAR_BORDER
+                button.tooltip = i18n.get("voice_favorite_remove") if favorite else i18n.get("voice_favorite_add")
+                button.visible = favorite or hovered[0]
+                self._safe_update(button)
+
+    def _on_favorite_clicked(self, key):
+        if key in self._favorite_keys:
+            self._favorite_keys.remove(key)
+        else:
+            self._favorite_keys.add(key)
+        self._refresh_favorite_buttons((key,))
+        callback = getattr(self, "on_favorite_toggled", None)
+        if callback is not None:
+            callback(key, key in self._favorite_keys)
+
+    def _remember_voice_scroll(self, side, event):
+        if event.pixels is not None:
+            self._voice_scroll_offsets[side] = max(0.0, event.pixels)
+        viewport_height = getattr(event, "viewport_dimension", None)
+        if viewport_height is not None and viewport_height > 0:
+            self._voice_viewport_heights[side] = viewport_height
+            if self._voice_focus_pending[side]:
+                self._voice_focus_pending[side] = False
+                self._scroll_selected_voice_to_center(side)
+
+    def focus_selected_voices(self, side="both"):
+        """Center each selected voice after the voice page has been mounted."""
+        if not self._is_mounted():
+            return
+        sides = ("left", "right") if side == "both" else (side,)
+        for list_side in sides:
+            if self._selected_voice_indices[list_side] is None:
+                continue
+            if self._voice_viewport_heights[list_side] is None:
+                # A one-pixel scroll yields the actual ListView viewport after layout.
+                # If the list cannot scroll, its selected voice is already visible.
+                self._voice_focus_pending[list_side] = True
+                self._voice_list(list_side).scroll_to(offset=1, duration=0)
+            else:
+                self._scroll_selected_voice_to_center(list_side)
+
+    def _voice_list(self, side):
+        return self.list_left if side == "left" else self.list_right
+
+    def _scroll_selected_voice_to_center(self, side):
+        index = self._selected_voice_indices[side]
+        viewport_height = self._voice_viewport_heights[side]
+        if index is None or not viewport_height:
+            return
+        list_view = self._voice_list(side)
+        # Leave enough space to center even the first and last item.
+        edge_padding = max(self._voice_list_padding, (viewport_height - self._voice_row_extent) / 2)
+        self._set_voice_edge_padding(side, edge_padding)
+        content_height = len(list_view.controls) * self._voice_row_extent + 2 * edge_padding
+        max_offset = max(0, content_height - viewport_height)
+        center_offset = (
+            edge_padding + index * self._voice_row_extent
+            - (viewport_height - self._voice_row_extent) / 2
+        )
+        list_view.scroll_to(offset=max(0, min(center_offset, max_offset)), duration=0)
+
+    def _set_voice_edge_padding(self, side, edge_padding):
+        if self._voice_edge_padding[side] == edge_padding:
+            return
+        self._voice_edge_padding[side] = edge_padding
+        list_view = self._voice_list(side)
+        list_view.padding = ft.padding.only(
+            left=self._voice_list_padding, right=self._voice_list_padding,
+            top=edge_padding, bottom=edge_padding,
+        )
+        self._safe_update(list_view)
+
+    def populate_voices(self, voice_list, side='both', locate_selected=True):
         # voice_list is a list of dicts: {"name": str, "lang": str, "region": str}
         self.all_voices_data = voice_list # Store for filtering
         
@@ -581,13 +701,15 @@ class HomeView(ft.Container):
             en = next((l for l in langs if l.startswith("en")), langs[0] if langs else None)
             self.lang_dropdown_right.value = en
 
-        self._render_voices(voice_list, side)
+        self._render_voices(voice_list, side, locate_selected=locate_selected)
 
     def _on_filter_change(self, side):
         if hasattr(self, 'all_voices_data'):
-            self._render_voices(self.all_voices_data, side)
+            self._render_voices(self.all_voices_data, side, locate_selected=True)
 
-    def _render_voices(self, voice_list, side='both'):
+    def _render_voices(self, voice_list, side='both', locate_selected=False):
+        # Rebuilding controls can emit an on_scroll event at zero before restoration.
+        saved_offsets = self._voice_scroll_offsets.copy()
         
         def filter_list(full_list, lang_filter):
             if not lang_filter: return full_list
@@ -605,9 +727,10 @@ class HomeView(ft.Container):
             target_list.controls.clear()
             nav_row.controls.clear()
             region_positions.clear()
+            selected_index = None
             
             if not data_source:
-                return
+                return selected_index
             
             # Collect unique regions for navigation
             regions = []
@@ -644,24 +767,21 @@ class HomeView(ft.Container):
                     # Simple elegant header - centered badge style
                     section_header = ft.Container(
                         key=f"region_{region}",
-                        content=ft.Text(
-                            region, 
-                            weight="bold", 
-                            size=self.ui_scale.font(12),
-                            color="onSecondaryContainer",
-                            text_align=ft.TextAlign.CENTER,
-                        ),
-                        bgcolor="secondaryContainer",
-                        padding=ft.padding.symmetric(
-                            horizontal=self.ui_scale.px(12),
-                            vertical=self.ui_scale.px(4),
-                        ),
-                        border_radius=self.ui_scale.px(15),
-                        margin=ft.margin.only(
-                            top=self.ui_scale.px(12),
-                            bottom=self.ui_scale.px(6),
-                        ),
+                        height=self._voice_row_extent,
                         alignment=ft.alignment.Alignment(0, 0),
+                        content=ft.Container(
+                            content=ft.Text(
+                                region,
+                                weight="bold",
+                                size=self.ui_scale.font(12),
+                                color="onSecondaryContainer",
+                                text_align=ft.TextAlign.CENTER,
+                                no_wrap=True,
+                            ),
+                            bgcolor="secondaryContainer",
+                            padding=ft.padding.symmetric(horizontal=self.ui_scale.px(12), vertical=self.ui_scale.px(4)),
+                            border_radius=self.ui_scale.px(15),
+                        ),
                     )
                     target_list.controls.append(section_header)
                     current_region = region
@@ -736,9 +856,31 @@ class HomeView(ft.Container):
                         trailing_content = ft.Icon(ft.Icons.CHECK, color=check_color)
                         bg = BG_B if active_slot == "right" else BG_A
 
+                if (is_left if list_side == "left" else is_right) and selected_index is None:
+                    selected_index = len(target_list.controls)
+
+                favorite_key = self._favorite_key(item)
+                hovered = [False]
+                favorite = favorite_key in self._favorite_keys
+                favorite_button = ft.IconButton(
+                    icon=ft.Icons.STAR if favorite else ft.Icons.STAR_BORDER,
+                    icon_color=ft.Colors.AMBER_700,
+                    icon_size=self.ui_scale.px(19),
+                    tooltip=i18n.get("voice_favorite_remove") if favorite else i18n.get("voice_favorite_add"),
+                    visible=favorite,
+                    on_click=(lambda e, key=favorite_key: self._on_favorite_clicked(key)) if favorite_key else None,
+                )
+                if favorite_key is not None:
+                    self._favorite_buttons.setdefault(favorite_key, []).append((favorite_button, hovered, list_side))
+                favorite_slot = ft.Container(content=favorite_button, width=self.ui_scale.px(40))
+                trailing_content = ft.Row(
+                    [control for control in (trailing_content, favorite_slot) if control is not None],
+                    tight=True, spacing=self.ui_scale.px(4),
+                )
+
                 tile = ft.ListTile(
                     leading=ft.Icon(ft.Icons.RECORD_VOICE_OVER, color=ft.Colors.ON_SURFACE),
-                    title=ft.Text(display_name, size=self.ui_scale.font(14), weight="w500"),
+                    title=ft.Text(display_name, size=self.ui_scale.font(14), weight="w500", no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
                     trailing=trailing_content,
                     dense=True,
                     data={
@@ -752,17 +894,41 @@ class HomeView(ft.Container):
                     hover_color=ft.Colors.with_opacity(0.1, "primary"),
                     bgcolor=bg
                 )
-                target_list.controls.append(tile)
+                def show_favorite(e, button=favorite_button, hover=hovered, key=favorite_key):
+                    hover[0] = e.data == "true"
+                    button.visible = key is not None and (key in self._favorite_keys or hover[0])
+                    self._safe_update(button)
+
+                target_list.controls.append(ft.Container(
+                    key=f"voice_{list_side}_{name}", height=self._voice_row_extent,
+                    content=tile, alignment=ft.alignment.Alignment(0, 0), on_hover=show_favorite,
+                ))
+
+            return selected_index
+
+        rendered_sides = {"left", "right"} if side == "both" else {side}
+        self._favorite_buttons = {
+            key: [(button, hovered, list_side) for button, hovered, list_side in entries
+                  if list_side not in rendered_sides]
+            for key, entries in self._favorite_buttons.items()
+        }
+        selected_indices = {}
             
         if side in ('both', 'left'):
             if not hasattr(self, '_region_positions_left'):
                 self._region_positions_left = {}
-            create_tiles(self.list_left, self.region_nav_left, left_voices, self.list_left, self._region_positions_left, "left")
+            selected_indices["left"] = create_tiles(self.list_left, self.region_nav_left, left_voices, self.list_left, self._region_positions_left, "left")
 
         if side in ('both', 'right'):
             if not hasattr(self, '_region_positions_right'):
                 self._region_positions_right = {}
-            create_tiles(self.list_right, self.region_nav_right, right_voices, self.list_right, self._region_positions_right, "right")
+            selected_indices["right"] = create_tiles(self.list_right, self.region_nav_right, right_voices, self.list_right, self._region_positions_right, "right")
+
+        self._selected_voice_indices.update(selected_indices)
+        for list_side, index in selected_indices.items():
+            if index is None:
+                self._voice_focus_pending[list_side] = False
+                self._set_voice_edge_padding(list_side, self._voice_list_padding)
 
         if side == 'both':
             self._safe_update()
@@ -770,14 +936,26 @@ class HomeView(ft.Container):
             self._safe_update(self.region_nav_left, self.list_left)
         elif side == 'right':
             self._safe_update(self.region_nav_right, self.list_right)
+
+        if self._is_mounted():
+            for list_side in selected_indices:
+                list_view = self.list_left if list_side == "left" else self.list_right
+                try:
+                    if not locate_selected:
+                        list_view.scroll_to(offset=saved_offsets[list_side], duration=0)
+                except Exception as ex:
+                    print(f"DEBUG: Voice list scroll restore skipped: {ex}")
+            if locate_selected:
+                self.focus_selected_voices(side)
     
     def _scroll_to_region_by_index(self, list_view, index):
         """Scroll to a region section by control index - more reliable for distant items"""
         try:
-            # Calculate approximate offset based on index
-            # Average item height follows the configured UI scale.
-            estimated_offset = index * self.ui_scale.px(50)
-            list_view.scroll_to(offset=estimated_offset, duration=300)
+            list_view.scroll_to(
+                offset=self._voice_edge_padding["left" if list_view is self.list_left else "right"]
+                + index * self._voice_row_extent,
+                duration=300,
+            )
             self._host_page.update()
         except Exception as e:
             print(f"DEBUG: Scroll to region by index failed: {e}")
@@ -1053,6 +1231,7 @@ class HomeView(ft.Container):
                 if getattr(self, "_single_active_slot", "right") == "left"
                 else i18n.get("generate_button_latest")
             )
+        self._refresh_favorite_buttons()
         self._safe_update()
 
     def _is_mounted(self):
