@@ -10,14 +10,17 @@ from config.ui_scale import (
 )
 import webbrowser
 import os
+from types import SimpleNamespace
 
 
 def create_dropdown(**kwargs):
     on_event = kwargs.pop("on_event", None)
+    # Flet 0.28.3's new Dropdown has no height constraint and keeps a 48 px
+    # field at every UI scale. The pinned M2 control accepts scaled height.
     try:
-        return ft.Dropdown(on_change=on_event, **kwargs)
+        return ft.DropdownM2(on_change=on_event, **kwargs)
     except TypeError:
-        return ft.Dropdown(on_select=on_event, **kwargs)
+        return ft.DropdownM2(on_select=on_event, **kwargs)
 
 
 class SettingsView(ft.Container):
@@ -27,6 +30,37 @@ class SettingsView(ft.Container):
         self.ui_scale = ui_scale or UiScale()
         px = self.ui_scale.px
         font = self.ui_scale.font
+        switch_scale = ft.Scale(scale=self.ui_scale.factor, alignment=ft.alignment.top_left)
+        button_style = ft.ButtonStyle(
+            padding=ft.padding.symmetric(horizontal=px(16), vertical=px(8)),
+            text_style=ft.TextStyle(size=font(14)),
+            icon_size=px(18),
+        )
+
+        self._switch_label_texts = {}
+
+        def switch_slot(control):
+            label = ft.Text(
+                control.label,
+                size=font(14),
+                on_tap=lambda _, switch=control: self._toggle_switch_from_label(switch),
+            )
+            self._switch_label_texts[id(control)] = label
+            control.label = None
+            # Positioned children keep native geometry while the stack reserves scaled space.
+            control.left = 0
+            control.top = 0
+            control.width = 60
+            control.height = 48
+            return ft.Row(
+                [
+                    ft.Stack([control], width=px(60), height=px(48), clip_behavior=ft.ClipBehavior.NONE),
+                    label,
+                ],
+                spacing=px(8),
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            )
+
         self.expand = True
         self.padding = px(20)
         
@@ -37,6 +71,7 @@ class SettingsView(ft.Container):
         # 1. Appearance
         self.theme_switch = ft.Switch(
             label=i18n.get("theme_label", "Dark Mode"),
+            scale=switch_scale,
             value=False,
             on_change=self._on_theme_changed
         )
@@ -44,11 +79,15 @@ class SettingsView(ft.Container):
         self.language_dropdown = create_dropdown(
             value=i18n.current_language,
             options=[
-                ft.dropdown.Option("zh", "中文"),
-                ft.dropdown.Option("en", "English"),
+                ft.dropdownm2.Option("zh", "中文"),
+                ft.dropdownm2.Option("en", "English"),
             ],
             width=px(120),
+            height=px(56),
             text_size=font(14),
+            content_padding=px(12),
+            select_icon_size=px(24),
+            dense=True,
             on_event=self._on_language_change,
         )
 
@@ -58,8 +97,10 @@ class SettingsView(ft.Container):
             input_filter=ft.NumbersOnlyInputFilter(),
             hint_text=f"{MIN_UI_SCALE_PERCENT}-{MAX_UI_SCALE_PERCENT}",
             suffix_text="%",
-            width=px(120, minimum=90),
+            width=px(120),
+            height=px(56),
             text_size=font(14),
+            content_padding=px(12),
             on_change=self._on_ui_scale_input_changed,
             on_blur=self._on_ui_scale_changed,
             on_submit=self._on_ui_scale_changed,
@@ -69,6 +110,7 @@ class SettingsView(ft.Container):
         # 2. Behavior
         self.autoplay_switch = ft.Switch(
             label=i18n.get("settings_autoplay_label"),
+            scale=switch_scale,
             value=True,
             on_change=self._save_settings
         )
@@ -77,11 +119,15 @@ class SettingsView(ft.Container):
         self.tts_engine_dropdown = create_dropdown(
             value="edge_online",
             options=[
-                ft.dropdown.Option("edge_online", i18n.get("tts_engine_edge_online")),
-                ft.dropdown.Option("local_kokoro", i18n.get("tts_engine_local_kokoro")),
+                ft.dropdownm2.Option("edge_online", i18n.get("tts_engine_edge_online")),
+                ft.dropdownm2.Option("local_kokoro", i18n.get("tts_engine_local_kokoro")),
             ],
             width=px(280),
+            height=px(56),
             text_size=font(14),
+            content_padding=px(12),
+            select_icon_size=px(24),
+            dense=True,
             on_event=self._on_tts_engine_change,
         )
 
@@ -97,6 +143,7 @@ class SettingsView(ft.Container):
 
         self.local_engine_auto_fallback_switch = ft.Switch(
             label=i18n.get("local_engine_auto_fallback_label"),
+            scale=switch_scale,
             value=True,
             on_change=self._save_settings,
         )
@@ -104,73 +151,97 @@ class SettingsView(ft.Container):
         self.local_engine_source_dropdown = create_dropdown(
             value="official",
             options=[
-                ft.dropdown.Option("official", i18n.get("local_engine_download_source_official")),
-                ft.dropdown.Option("mirror", i18n.get("local_engine_download_source_mirror")),
+                ft.dropdownm2.Option("official", i18n.get("local_engine_download_source_official")),
+                ft.dropdownm2.Option("mirror", i18n.get("local_engine_download_source_mirror")),
             ],
             width=px(140),
+            height=px(56),
             text_size=font(14),
+            content_padding=px(12),
+            select_icon_size=px(24),
+            dense=True,
             on_event=self._save_settings,
         )
 
         self.local_engine_install_button = ft.OutlinedButton(
             text=i18n.get("local_engine_install_button"),
             icon=ft.Icons.DOWNLOAD,
+            height=px(40),
+            style=button_style,
             on_click=self._on_local_engine_install,
         )
         self.local_engine_healthcheck_button = ft.OutlinedButton(
             text=i18n.get("local_engine_healthcheck_button"),
             icon=ft.Icons.VERIFIED,
+            height=px(40),
+            style=button_style,
             on_click=self._on_local_engine_healthcheck,
         )
         self.local_engine_manual_button = ft.OutlinedButton(
             text=i18n.get("local_engine_manual_button"),
             icon=ft.Icons.TERMINAL,
+            height=px(40),
+            style=button_style,
             on_click=self._on_local_engine_manual,
         )
         self.local_engine_open_dir_button = ft.OutlinedButton(
             text=i18n.get("local_engine_open_dir_button"),
             icon=ft.Icons.FOLDER_OPEN,
+            height=px(40),
+            style=button_style,
             on_click=self._on_local_engine_open_dir,
         )
         self.local_engine_uninstall_button = ft.OutlinedButton(
             text=i18n.get("local_engine_uninstall_button"),
             icon=ft.Icons.DELETE,
-            style=ft.ButtonStyle(color=ft.Colors.RED_400),
+            height=px(40),
+            style=ft.ButtonStyle(
+                color=ft.Colors.RED_400,
+                padding=ft.padding.symmetric(horizontal=px(16), vertical=px(8)),
+                text_style=ft.TextStyle(size=font(14)),
+                icon_size=px(18),
+            ),
             on_click=self._on_local_engine_uninstall,
         )
 
         self.ctrl_c_switch = ft.Switch(
             label=i18n.get("settings_enable_clipboard_monitor_label", i18n.get("settings_enable_ctrl_c_label")),
+            scale=switch_scale,
             value=True,
             on_change=self._save_settings
         )
 
         self.selection_switch = ft.Switch(
             label=i18n.get("settings_enable_selection_label"),
+            scale=switch_scale,
             value=False,
             on_change=self._on_selection_mode_change
         )
         
         self.dual_voice_mode_switch = ft.Switch(
             label=i18n.get("settings_dual_voice_mode_label"),
+            scale=switch_scale,
             value=False,
             on_change=self._on_dual_voice_mode_change
         )
 
         self.selection_dual_mode_switch = ft.Switch(
             label=i18n.get("settings_selection_dual_mode_label"),
+            scale=switch_scale,
             value=False,
             on_change=self._on_selection_dual_mode_change
         )
 
         self.copy_file_switch = ft.Switch(
             label=i18n.get("copy_audio_to_clipboard"), 
+            scale=switch_scale,
             value=True,
             on_change=self._save_settings
         )
 
         self.tray_switch = ft.Switch(
              label=i18n.get("settings_minimize_to_tray_label", "Minimize to Tray"),
+             scale=switch_scale,
              value=False,
              on_change=self._save_settings
         )
@@ -182,7 +253,9 @@ class SettingsView(ft.Container):
             value="750",
             keyboard_type=ft.KeyboardType.NUMBER,
             width=px(100),
+            height=px(56),
             text_size=font(14),
+            content_padding=px(12),
             on_blur=self._on_window_size_changed
         )
         
@@ -192,13 +265,17 @@ class SettingsView(ft.Container):
             value="850",
             keyboard_type=ft.KeyboardType.NUMBER,
             width=px(100),
+            height=px(56),
             text_size=font(14),
+            content_padding=px(12),
             on_blur=self._on_window_size_changed
         )
         
         self.reset_size_button = ft.OutlinedButton(
             text=i18n.get("reset_button"),
             icon=ft.Icons.RESTORE,
+            height=px(40),
+            style=button_style,
             on_click=self._reset_window_size
         )
         
@@ -207,13 +284,17 @@ class SettingsView(ft.Container):
             value="20",
             keyboard_type=ft.KeyboardType.NUMBER,
             width=px(200),
+            height=px(56),
             text_size=font(14),
+            content_padding=px(12),
             on_blur=self._save_settings
         )
         
         self.open_data_dir_button = ft.OutlinedButton(
             text=i18n.get("open_data_dir", "Open Data Directory"),
             icon=ft.Icons.FOLDER_OPEN,
+            height=px(40),
+            style=button_style,
             on_click=lambda _: os.startfile(DATA_DIR) if os.name == 'nt' else None
         )
         
@@ -236,6 +317,8 @@ class SettingsView(ft.Container):
         self.check_updates_button = ft.OutlinedButton(
             text=i18n.get("check_for_updates"),
             icon=ft.Icons.OPEN_IN_NEW,
+            height=px(40),
+            style=button_style,
             on_click=lambda _: webbrowser.open(GITHUB_URL)
         )
         self.version_text = ft.Text(f"Version {APP_VERSION}", size=font(12), color="grey", text_align=ft.TextAlign.CENTER)
@@ -246,10 +329,12 @@ class SettingsView(ft.Container):
             read_only=True,
             multiline=True,
             min_lines=12,
+            text_size=font(14),
+            content_padding=px(12),
         )
         self.local_engine_manual_dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text(i18n.get("local_engine_manual_title")),
+            title=ft.Text(i18n.get("local_engine_manual_title"), size=font(20)),
             content=ft.Column(
                 [
                     ft.Text(i18n.get("local_engine_manual_hint"), size=font(12), color=ft.Colors.OUTLINE),
@@ -257,20 +342,21 @@ class SettingsView(ft.Container):
                 ],
                 tight=True,
                 scroll=ft.ScrollMode.AUTO,
+                spacing=px(10),
             ),
             actions=[
-                ft.TextButton(text=i18n.get("local_engine_manual_close", i18n.get("dialog_cancel")), on_click=self._close_manual_dialog),
+                ft.TextButton(text=i18n.get("local_engine_manual_close", i18n.get("dialog_cancel")), height=px(40), style=button_style, on_click=self._close_manual_dialog),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
         self.local_engine_uninstall_confirm = ft.AlertDialog(
             modal=True,
-            title=ft.Text(i18n.get("local_engine_uninstall_confirm_title", "Confirm Uninstall")),
-            content=ft.Text(i18n.get("local_engine_uninstall_confirm_msg", "Uninstall offline engine?")),
+            title=ft.Text(i18n.get("local_engine_uninstall_confirm_title", "Confirm Uninstall"), size=font(20)),
+            content=ft.Text(i18n.get("local_engine_uninstall_confirm_msg", "Uninstall offline engine?"), size=font(14)),
             actions=[
-                ft.TextButton(text=i18n.get("dialog_cancel", "Cancel"), on_click=self._close_uninstall_dialog),
-                ft.TextButton(text=i18n.get("dialog_confirm", "Confirm"), on_click=self._confirm_uninstall),
+                ft.TextButton(text=i18n.get("dialog_cancel", "Cancel"), height=px(40), style=button_style, on_click=self._close_uninstall_dialog),
+                ft.TextButton(text=i18n.get("dialog_confirm", "Confirm"), height=px(40), style=button_style, on_click=self._confirm_uninstall),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -281,7 +367,7 @@ class SettingsView(ft.Container):
                 ft.Divider(),
                 
                 self.section_appearance_text,
-                self.theme_switch,
+                switch_slot(self.theme_switch),
                 ft.Row([
                     self.language_label_text,
                     self.language_dropdown
@@ -293,7 +379,7 @@ class SettingsView(ft.Container):
                 ft.Divider(height=px(10), color="transparent"),
                 
                 self.section_playback_text,
-                self.autoplay_switch,
+                switch_slot(self.autoplay_switch),
                 ft.Divider(height=px(10), color="transparent"),
 
                 self.section_tts_engine_text,
@@ -310,7 +396,7 @@ class SettingsView(ft.Container):
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
                 self.local_engine_path_text,
-                self.local_engine_auto_fallback_switch,
+                switch_slot(self.local_engine_auto_fallback_switch),
                 ft.Row(
                     [self.local_engine_source_label_text, self.local_engine_source_dropdown],
                     spacing=px(10),
@@ -331,21 +417,21 @@ class SettingsView(ft.Container):
                 ft.Divider(height=px(10), color="transparent"),
 
                 self.section_voice_mode_text,
-                self.dual_voice_mode_switch,
+                switch_slot(self.dual_voice_mode_switch),
                 ft.Divider(height=px(10), color="transparent"),
 
                 self.section_selection_mode_text,
-                self.selection_switch,
-                self.selection_dual_mode_switch,
+                switch_slot(self.selection_switch),
+                switch_slot(self.selection_dual_mode_switch),
                 ft.Divider(height=px(10), color="transparent"),
 
                 self.section_copy_mode_text,
-                self.ctrl_c_switch,
-                self.copy_file_switch,
+                switch_slot(self.ctrl_c_switch),
+                switch_slot(self.copy_file_switch),
                 ft.Divider(height=px(10), color="transparent"),
                 
                 self.section_window_text,
-                self.tray_switch,
+                switch_slot(self.tray_switch),
                 self.window_size_label_text,
                 ft.Row(
                     [
@@ -372,7 +458,8 @@ class SettingsView(ft.Container):
                 self.check_updates_button,
                 self.version_text
             ],
-            scroll=ft.ScrollMode.AUTO
+            scroll=ft.ScrollMode.AUTO,
+            spacing=px(10),
         )
 
     def _is_mounted(self):
@@ -669,23 +756,34 @@ class SettingsView(ft.Container):
         if hasattr(self, 'on_window_size_change'):
             self.on_window_size_change(750, 850)
 
+    def _set_switch_label(self, control, value):
+        self._switch_label_texts[id(control)].value = value
+
+    def _toggle_switch_from_label(self, control):
+        if control.disabled:
+            return
+        control.value = not control.value
+        if control.on_change:
+            control.on_change(SimpleNamespace(control=control))
+        self._safe_update(control)
+
     def refresh_texts(self):
         self.header.value = i18n.get("tab_settings")
-        self.theme_switch.label = i18n.get("theme_label", "Dark Mode")
-        self.autoplay_switch.label = i18n.get("settings_autoplay_label")
+        self._set_switch_label(self.theme_switch, i18n.get("theme_label", "Dark Mode"))
+        self._set_switch_label(self.autoplay_switch, i18n.get("settings_autoplay_label"))
         self.section_tts_engine_text.value = i18n.get("section_tts_engine")
         self.tts_engine_label_text.value = i18n.get("tts_engine_label")
         self.local_engine_status_label_text.value = i18n.get("local_engine_status_label")
         self.local_engine_source_label_text.value = i18n.get("local_engine_download_source_label")
 
         self.tts_engine_dropdown.options = [
-            ft.dropdown.Option("edge_online", i18n.get("tts_engine_edge_online")),
-            ft.dropdown.Option("local_kokoro", i18n.get("tts_engine_local_kokoro")),
+            ft.dropdownm2.Option("edge_online", i18n.get("tts_engine_edge_online")),
+            ft.dropdownm2.Option("local_kokoro", i18n.get("tts_engine_local_kokoro")),
         ]
-        self.local_engine_auto_fallback_switch.label = i18n.get("local_engine_auto_fallback_label")
+        self._set_switch_label(self.local_engine_auto_fallback_switch, i18n.get("local_engine_auto_fallback_label"))
         self.local_engine_source_dropdown.options = [
-            ft.dropdown.Option("official", i18n.get("local_engine_download_source_official")),
-            ft.dropdown.Option("mirror", i18n.get("local_engine_download_source_mirror")),
+            ft.dropdownm2.Option("official", i18n.get("local_engine_download_source_official")),
+            ft.dropdownm2.Option("mirror", i18n.get("local_engine_download_source_mirror")),
         ]
         self.local_engine_install_button.text = i18n.get("local_engine_install_button")
         self.local_engine_healthcheck_button.text = i18n.get("local_engine_healthcheck_button")
@@ -701,12 +799,12 @@ class SettingsView(ft.Container):
         self.local_engine_uninstall_confirm.actions[0].text = i18n.get("dialog_cancel", "Cancel")
         self.local_engine_uninstall_confirm.actions[1].text = i18n.get("dialog_confirm", "Confirm")
 
-        self.ctrl_c_switch.label = i18n.get("settings_enable_clipboard_monitor_label", i18n.get("settings_enable_ctrl_c_label"))
-        self.selection_switch.label = i18n.get("settings_enable_selection_label")
-        self.dual_voice_mode_switch.label = i18n.get("settings_dual_voice_mode_label")
-        self.selection_dual_mode_switch.label = i18n.get("settings_selection_dual_mode_label")
-        self.copy_file_switch.label = i18n.get("copy_audio_to_clipboard")
-        self.tray_switch.label = i18n.get("settings_minimize_to_tray_label", "Minimize to Tray")
+        self._set_switch_label(self.ctrl_c_switch, i18n.get("settings_enable_clipboard_monitor_label", i18n.get("settings_enable_ctrl_c_label")))
+        self._set_switch_label(self.selection_switch, i18n.get("settings_enable_selection_label"))
+        self._set_switch_label(self.dual_voice_mode_switch, i18n.get("settings_dual_voice_mode_label"))
+        self._set_switch_label(self.selection_dual_mode_switch, i18n.get("settings_selection_dual_mode_label"))
+        self._set_switch_label(self.copy_file_switch, i18n.get("copy_audio_to_clipboard"))
+        self._set_switch_label(self.tray_switch, i18n.get("settings_minimize_to_tray_label", "Minimize to Tray"))
         self.max_files_input.label = i18n.get("settings_max_files_label")
         self.reset_size_button.text = i18n.get("reset_button")
         self.open_data_dir_button.text = i18n.get("open_data_dir", "Open Data Directory")

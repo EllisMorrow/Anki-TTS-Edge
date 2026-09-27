@@ -8,10 +8,12 @@ MAX_HIGHLIGHT_WORDS = 320
 
 def create_dropdown(**kwargs):
     on_event = kwargs.pop("on_event", None)
+    # Flet 0.28.3's new Dropdown has no height constraint and keeps a 48 px
+    # field at every UI scale. The pinned M2 control accepts scaled height.
     try:
-        return ft.Dropdown(on_change=on_event, **kwargs)
+        return ft.DropdownM2(on_change=on_event, **kwargs)
     except TypeError:
-        return ft.Dropdown(on_select=on_event, **kwargs)
+        return ft.DropdownM2(on_select=on_event, **kwargs)
 
 class HomeView(ft.Container):
     def __init__(self, page: ft.Page, ui_scale: UiScale | None = None):
@@ -47,6 +49,7 @@ class HomeView(ft.Container):
             max_lines=5,
             text_size=font(14),
             content_padding=px(12),
+            cursor_width=px(2),
             expand=True, # Expand to fill Stack
             border_color=ft.Colors.OUTLINE,
             focused_border_color="primary",
@@ -83,13 +86,17 @@ class HomeView(ft.Container):
         self.rate_slider = self._build_slider(i18n.get("rate_label"), 0, -100, 100)
         self.volume_slider = self._build_slider(i18n.get("volume_label"), 0, -100, 100)
         self.input_label_text = ft.Text(i18n.get("input_text_label"), weight="bold", size=font(16))
-        self.rate_label_text = ft.Text(i18n.get("rate_label"))
-        self.volume_label_text = ft.Text(i18n.get("volume_label"))
+        self.rate_label_text = ft.Text(i18n.get("rate_label"), size=font(14))
+        self.volume_label_text = ft.Text(i18n.get("volume_label"), size=font(14))
 
         # 2.5 Filters (Dual Dropdowns)
         self.lang_dropdown_left = create_dropdown(
             label="Language (Left)",
             text_size=font(14),
+            label_style=ft.TextStyle(size=font(12)),
+            content_padding=px(12),
+            select_icon_size=px(24),
+            height=px(56),
             on_event=lambda e: self._on_filter_change('left'),
             expand=True,
             dense=True
@@ -97,6 +104,10 @@ class HomeView(ft.Container):
         self.lang_dropdown_right = create_dropdown(
             label="Language (Right)", 
             text_size=font(14),
+            label_style=ft.TextStyle(size=font(12)),
+            content_padding=px(12),
+            select_icon_size=px(24),
+            height=px(56),
             on_event=lambda e: self._on_filter_change('right'),
             expand=True,
             dense=True
@@ -127,7 +138,11 @@ class HomeView(ft.Container):
         self.offline_demo_button = ft.TextButton(
             text=i18n.get("offline_voice_demo_link", "离线语音音效听"),
             icon=ft.Icons.OPEN_IN_NEW,
-            style=ft.ButtonStyle(padding=ft.padding.all(0)),
+            style=ft.ButtonStyle(
+                padding=ft.padding.all(0),
+                text_style=ft.TextStyle(size=font(14)),
+                icon_size=px(18),
+            ),
             on_click=self._open_offline_demo,
         )
         self.offline_demo_container = ft.Container(
@@ -138,7 +153,7 @@ class HomeView(ft.Container):
         
         # 3. Voice Lists (Dual Column)
         # Using ListView for efficient scrolling
-        self._voice_row_extent = max(px(54), 54)
+        self._voice_row_extent = px(54)
         self._voice_list_padding = px(10)
         self._voice_edge_padding = {"left": self._voice_list_padding, "right": self._voice_list_padding}
         self._voice_scroll_offsets = {"left": 0.0, "right": 0.0}
@@ -176,8 +191,8 @@ class HomeView(ft.Container):
         )
         
         # Headers for lists
-        self.header_left = ft.Text(i18n.get("voice_list_label_1"), weight="bold")
-        self.header_right = ft.Text(i18n.get("voice_list_label_2"), weight="bold")
+        self.header_left = ft.Text(i18n.get("voice_list_label_1"), weight="bold", size=font(14))
+        self.header_right = ft.Text(i18n.get("voice_list_label_2"), weight="bold", size=font(14))
         
         # Containers for lists (border style like text input, no gray background)
         list_container_left = ft.Container(
@@ -208,14 +223,24 @@ class HomeView(ft.Container):
         self.btn_gen_a = ft.FilledTonalButton(
             text=i18n.get("generate_button_previous"),
             icon=ft.Icons.PLAY_CIRCLE_OUTLINE, 
-            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=px(8))),
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=px(8)),
+                text_style=ft.TextStyle(size=font(14)),
+                icon_size=px(18),
+                padding=ft.padding.symmetric(horizontal=px(16), vertical=px(8)),
+            ),
             expand=True,
             height=px(50),
         )
         self.btn_gen_b = ft.FilledButton(
             text=i18n.get("generate_button_latest"),
             icon=ft.Icons.PLAY_CIRCLE_FILLED, 
-            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=px(8))),
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=px(8)),
+                text_style=ft.TextStyle(size=font(14)),
+                icon_size=px(18),
+                padding=ft.padding.symmetric(horizontal=px(16), vertical=px(8)),
+            ),
             expand=True, 
             height=px(50),
         )
@@ -225,18 +250,21 @@ class HomeView(ft.Container):
             icon=ft.Icons.REPLAY,
             tooltip=i18n.get("control_replay", "重播"),
             icon_size=px(20),
+            width=px(40), height=px(40), padding=px(8),
         )
         self.btn_play_pause = ft.IconButton(
             icon=ft.Icons.PLAY_CIRCLE_OUTLINE,
             selected_icon=ft.Icons.PAUSE_CIRCLE_OUTLINE,
             tooltip=i18n.get("control_play_pause", "播放/暂停"),
             icon_size=px(20),
+            width=px(40), height=px(40), padding=px(8),
         )
         self.btn_stop = ft.IconButton(
             icon=ft.Icons.STOP_CIRCLE_OUTLINED,
             tooltip=i18n.get("control_stop", "停止"),
             icon_color=ft.Colors.RED,
             icon_size=px(20),
+            width=px(40), height=px(40), padding=px(8),
         )
         
         # 4.6 Sentence Navigation Buttons
@@ -244,11 +272,13 @@ class HomeView(ft.Container):
             icon=ft.Icons.SKIP_PREVIOUS,
             tooltip=i18n.get("control_prev_sentence", "上一句"),
             icon_size=px(20),
+            width=px(40), height=px(40), padding=px(8),
         )
         self.btn_next_sentence = ft.IconButton(
             icon=ft.Icons.SKIP_NEXT,
             tooltip=i18n.get("control_next_sentence", "下一句"),
             icon_size=px(20),
+            width=px(40), height=px(40), padding=px(8),
         )
         
         # 5. Pin Button
@@ -257,6 +287,7 @@ class HomeView(ft.Container):
              selected_icon=ft.Icons.PUSH_PIN,
              tooltip=i18n.get("window_pin", "置顶窗口"),
              icon_size=px(20),
+             width=px(40), height=px(40), padding=px(8),
              on_click=self._toggle_pin
         )
         
@@ -266,6 +297,7 @@ class HomeView(ft.Container):
             icon=ft.Icons.EXPAND_MORE,
             tooltip=i18n.get("expand_text_input", "展开"),
             icon_size=px(16),
+            width=px(24), height=px(24), padding=px(4),
             on_click=self._toggle_expand_collapse,
         )
 
@@ -332,6 +364,12 @@ class HomeView(ft.Container):
         
         # Parameters row (will be hidden when text is expanded)
         self.params_row = ft.Container(
+            theme=ft.Theme(slider_theme=ft.SliderTheme(
+                track_height=px(4),
+                thumb_size=ft.Size(px(20), px(20)),
+                value_indicator_text_style=ft.TextStyle(size=font(14)),
+                year_2023=False,
+            )) if self.ui_scale.factor != 1 else None,
             content=ft.Row(
                 [
                     ft.Column([self.rate_label_text, self.rate_slider], expand=True),
@@ -680,8 +718,8 @@ class HomeView(ft.Container):
         langs = sorted(list(set([v["lang"] for v in voice_list])))
         
         # Create DISTINCT option lists for each dropdown to avoid shared control ownership issues
-        options_left = [ft.dropdown.Option(l) for l in langs]
-        options_right = [ft.dropdown.Option(l) for l in langs]
+        options_left = [ft.dropdownm2.Option(l) for l in langs]
+        options_right = [ft.dropdownm2.Option(l) for l in langs]
         
         # Update Dropdowns (preserve selection if possible)
         current_l = self.lang_dropdown_left.value
@@ -853,7 +891,7 @@ class HomeView(ft.Container):
                     active_is_selected = is_right if active_slot == "right" else is_left
                     if active_is_selected:
                         check_color = ft.Colors.TEAL if active_slot == "right" else ft.Colors.INDIGO
-                        trailing_content = ft.Icon(ft.Icons.CHECK, color=check_color)
+                        trailing_content = ft.Icon(ft.Icons.CHECK, color=check_color, size=self.ui_scale.px(24))
                         bg = BG_B if active_slot == "right" else BG_A
 
                 if (is_left if list_side == "left" else is_right) and selected_index is None:
@@ -866,6 +904,9 @@ class HomeView(ft.Container):
                     icon=ft.Icons.STAR if favorite else ft.Icons.STAR_BORDER,
                     icon_color=ft.Colors.AMBER_700,
                     icon_size=self.ui_scale.px(19),
+                    width=self.ui_scale.px(40),
+                    height=self.ui_scale.px(40),
+                    padding=self.ui_scale.px(8),
                     tooltip=i18n.get("voice_favorite_remove") if favorite else i18n.get("voice_favorite_add"),
                     visible=favorite,
                     on_click=(lambda e, key=favorite_key: self._on_favorite_clicked(key)) if favorite_key else None,
@@ -879,10 +920,15 @@ class HomeView(ft.Container):
                 )
 
                 tile = ft.ListTile(
-                    leading=ft.Icon(ft.Icons.RECORD_VOICE_OVER, color=ft.Colors.ON_SURFACE),
+                    leading=ft.Icon(ft.Icons.RECORD_VOICE_OVER, color=ft.Colors.ON_SURFACE, size=self.ui_scale.px(24)),
                     title=ft.Text(display_name, size=self.ui_scale.font(14), weight="w500", no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
                     trailing=trailing_content,
                     dense=True,
+                    content_padding=ft.padding.symmetric(horizontal=self.ui_scale.px(16)),
+                    horizontal_spacing=self.ui_scale.px(16),
+                    min_leading_width=self.ui_scale.px(40),
+                    min_vertical_padding=self.ui_scale.px(4),
+                    min_height=self.ui_scale.px(48),
                     data={
                         "name": name,
                         "side": list_side,

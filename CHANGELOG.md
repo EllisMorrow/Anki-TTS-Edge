@@ -1,5 +1,12 @@
 # 更新日志 / Changelog
 
+## v2.9.7 (2026-09-28)
+
+### 🔧 修复 / Fixes
+
+- **界面缩放一致性**：开关、下拉框、输入框、按钮、滑块及声音列表现在与文字和间距一起按比例缩放，修复低缩放比例下部分原生控件仍维持原尺寸的问题。`30%` 至 `200%` 的设置范围不变。
+  **Consistent interface scaling**: Switches, dropdowns, text fields, buttons, sliders, and voice-list controls now scale with text and spacing. This fixes native controls remaining oversized at low scale settings while preserving the `30%` to `200%` range.
+
 ## v2.9.6 (2026-09-27)
 
 ### ✨ 新功能 / Features
