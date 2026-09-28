@@ -1,5 +1,16 @@
 # 更新日志 / Changelog
 
+## v2.9.8 (2026-09-28)
+
+### ✨ 界面优化 / Interface improvements
+
+- **声音页**：收紧输入区、筛选器、声音列表及参数区之间的留白，并将展开按钮贴近文本框下边缘中央；声音列表仍使用剩余空间。
+  **Voice page**: Reduced excess spacing around the input, filters, voice lists, and sliders, and moved the expand button to the input's lower center. Voice lists still use the available space.
+- **生成历史**：优化记录文字和元信息的层级、长文本显示与空状态；保留播放、删除和清空操作。
+  **History**: Improved record hierarchy, long-text display, and the empty state while retaining play, delete, and clear actions.
+- **设置页**：按用途整理设置分组，将本地语音引擎状态与相关操作放在一起，保持原有设置入口与自动保存行为。
+  **Settings**: Grouped controls by purpose and placed local-engine status beside its actions while preserving settings access and automatic saving.
+
 ## v2.9.7 (2026-09-28)
 
 ### 🔧 修复 / Fixes

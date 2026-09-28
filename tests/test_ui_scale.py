@@ -41,12 +41,19 @@ class UiScaleTests(unittest.TestCase):
         history = HistoryView(dummy_page(), compact)
         settings = SettingsView(dummy_page(), compact)
 
-        self.assertEqual(home.padding, compact.px(20))
-        self.assertEqual(home.text_input_wrapper.height, compact.px(140))
+        self.assertEqual(
+            home.padding,
+            ft.padding.only(
+                left=compact.px(20), top=compact.px(12),
+                right=compact.px(20), bottom=compact.px(16),
+            ),
+        )
+        self.assertEqual(home.text_input_wrapper.height, compact.px(120))
+        self.assertEqual(home.text_input.height, compact.px(120))
         self.assertEqual(home.text_input.text_size, compact.font(14))
         self.assertEqual(home.highlighted_text_overlay.padding, compact.px(12))
         self.assertEqual(home.btn_gen_b.height, compact.px(50))
-        self.assertEqual(history.padding, compact.px(20))
+        self.assertEqual(history.padding, compact.px(18))
         self.assertEqual(history.header_text.size, compact.font(24))
         self.assertEqual(settings.padding, compact.px(20))
         self.assertEqual(settings.header.size, compact.font(24))
@@ -104,7 +111,7 @@ class UiScaleTests(unittest.TestCase):
         self.assertTrue(all(text.size == scale.font(14) for text in highlighted_words))
         self.assertEqual(
             home.highlighted_text_column.height,
-            scale.px(140) - scale.px(24),
+            scale.px(120) - scale.px(24),
         )
 
         history = HistoryView(dummy_page(), scale)
@@ -279,6 +286,27 @@ class UiScaleTests(unittest.TestCase):
         self.assertIsNone(home.content.scroll)
         self.assertTrue(home.voice_area.expand)
         self.assertIn(home.voice_area.height, (None, ""))
+
+    def test_text_expansion_still_hides_and_restores_voice_controls(self):
+        home = HomeView(dummy_page())
+        for control in (
+            home.text_input, home.text_input_stack, home.text_input_wrapper,
+            home.text_input_container, home.btn_expand_collapse,
+            home.content, home,
+        ):
+            control.update = Mock()
+
+        home._toggle_expand_collapse(None)
+        self.assertFalse(home.filters_row.visible)
+        self.assertFalse(home.voice_area.visible)
+        self.assertIn(home.text_input.height, (None, ""))
+        self.assertEqual(home.btn_expand_collapse.icon, ft.Icons.EXPAND_LESS)
+
+        home._toggle_expand_collapse(None)
+        self.assertTrue(home.filters_row.visible)
+        self.assertTrue(home.voice_area.visible)
+        self.assertEqual(home.text_input.height, home.ui_scale.px(120))
+        self.assertEqual(home.btn_expand_collapse.icon, ft.Icons.EXPAND_MORE)
 
 
 if __name__ == "__main__":

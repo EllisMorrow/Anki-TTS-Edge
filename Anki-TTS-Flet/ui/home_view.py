@@ -22,8 +22,9 @@ class HomeView(ft.Container):
         self.ui_scale = ui_scale or UiScale()
         px = self.ui_scale.px
         font = self.ui_scale.font
+        self._collapsed_text_height = px(120)
         self.expand = True
-        self.padding = px(20)
+        self.padding = ft.padding.only(left=px(20), top=px(12), right=px(20), bottom=px(16))
         
         # --- UI Components ---
         
@@ -47,6 +48,7 @@ class HomeView(ft.Container):
             multiline=True,
             min_lines=3,
             max_lines=5,
+            height=self._collapsed_text_height,
             text_size=font(14),
             content_padding=px(12),
             cursor_width=px(2),
@@ -296,8 +298,9 @@ class HomeView(ft.Container):
         self.btn_expand_collapse = ft.IconButton(
             icon=ft.Icons.EXPAND_MORE,
             tooltip=i18n.get("expand_text_input", "展开"),
-            icon_size=px(16),
-            width=px(24), height=px(24), padding=px(4),
+            icon_size=px(18),
+            width=px(32), height=px(32), padding=px(6),
+            bgcolor="surface",
             on_click=self._toggle_expand_collapse,
         )
 
@@ -328,13 +331,13 @@ class HomeView(ft.Container):
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
         
-        # Expand/Collapse button container (centered at bottom of text input)
-        # We put it in a separate container below the stack, but with negative margin to overlap border?
-        # Simpler: Just put it in the column below. 
+        # Move the button visually onto the input's lower edge while keeping its
+        # full hit target in the column's layout.
         expand_button_container = ft.Container(
             content=self.btn_expand_collapse,
             alignment=ft.alignment.Alignment(0, 0),
-            height=px(20),
+            height=px(32),
+            offset=ft.Offset(0, -0.45),
         )
         
         # Text input container with Stack overlay for highlighting
@@ -343,12 +346,12 @@ class HomeView(ft.Container):
             self.highlighted_text_overlay,  # Overlay for word highlighting
         ])
         
-        # Wrap Stack in a Container to enforce minimum height stability
-        # Using fixed height to match max_lines=5 (approx 140px)
+        # Keep the field and its wrapper the same height so the attached
+        # expand button tracks the visible lower border.
         # We will manually toggle this height in _toggle_expand_collapse
         self.text_input_wrapper = ft.Container(
             content=self.text_input_stack,
-            height=px(140),
+            height=self._collapsed_text_height,
         )
         
         self.text_input_container = ft.Container(
@@ -359,6 +362,7 @@ class HomeView(ft.Container):
                     expand_button_container,
                 ],
                 spacing=0,
+                tight=True,
             ),
         )
         
@@ -372,8 +376,8 @@ class HomeView(ft.Container):
             )) if self.ui_scale.factor != 1 else None,
             content=ft.Row(
                 [
-                    ft.Column([self.rate_label_text, self.rate_slider], expand=True),
-                    ft.Column([self.volume_label_text, self.volume_slider], expand=True),
+                    ft.Column([self.rate_label_text, self.rate_slider], expand=True, tight=True, spacing=px(4)),
+                    ft.Column([self.volume_label_text, self.volume_slider], expand=True, tight=True, spacing=px(4)),
                 ],
                 spacing=px(20)
             ),
@@ -407,24 +411,25 @@ class HomeView(ft.Container):
         self.content = ft.Column(
             expand=True,
             alignment=ft.MainAxisAlignment.START,
+            spacing=0,
             controls=[
                 header_row,
                 self.text_input_container,
-                ft.Divider(height=px(10), color="transparent"),
+                ft.Container(height=px(8)),
                 
                 # Filters
                 self.filters_row,
-                ft.Divider(height=px(10), color="transparent"),
+                ft.Container(height=px(10)),
 
                 # Voice Selection Area
                 self.voice_area,
                 
-                ft.Divider(height=px(10), color="transparent"),
+                ft.Container(height=px(10)),
                 
                 # Parameters Row
                 self.params_row,
                 
-                ft.Divider(height=px(10), color="transparent"),
+                ft.Container(height=px(10)),
                 
                 # Buttons Row (only generate buttons, playback controls moved to header)
                 ft.Row(
@@ -472,10 +477,10 @@ class HomeView(ft.Container):
             # 展开：隐藏中间区域，让文本框扩展填充
             self.text_input.max_lines = 30  # 允许更多行
             self.text_input.min_lines = 15
+            self.text_input.height = None
             
-            # 隐藏Filters和Voice Selection（索引2-5的控件）
-            # 索引: 0=header_row, 1=text_input_container, 2=Divider, 3=Filters, 4=Divider, 5=VoiceSelection, 6=Divider, 7=params_row, 8=Divider, 9=Buttons
-            for i in [2, 3, 4, 5, 6]:  # 隐藏Divider, Filters, Divider, VoiceSelection, Divider
+            # 隐藏筛选器、声音列表及其相邻间距；主布局的索引保持稳定。
+            for i in [2, 3, 4, 5, 6]:
                 if i < len(main_content.controls):
                     main_content.controls[i].visible = False
             
@@ -483,6 +488,7 @@ class HomeView(ft.Container):
             self.text_input_wrapper.expand = True
             self.text_input_wrapper.height = None  # 移除固定高度
             self.text_input_container.expand = True  # 容器也需要扩展
+            self.text_input_container.content.tight = False
             
             self.btn_expand_collapse.icon = ft.Icons.EXPAND_LESS
             self.btn_expand_collapse.tooltip = i18n.get("collapse_text_input", "收纳")
@@ -490,6 +496,7 @@ class HomeView(ft.Container):
             # 收缩：恢复中间区域显示
             self.text_input.max_lines = 5
             self.text_input.min_lines = 3
+            self.text_input.height = self._collapsed_text_height
             
             # 恢复显示Filters和Voice Selection
             for i in [2, 3, 4, 5, 6]:
@@ -498,8 +505,9 @@ class HomeView(ft.Container):
             
             # 恢复固定高度
             self.text_input_wrapper.expand = False
-            self.text_input_wrapper.height = self.ui_scale.px(140)
+            self.text_input_wrapper.height = self._collapsed_text_height
             self.text_input_container.expand = False
+            self.text_input_container.content.tight = True
             
             self.btn_expand_collapse.icon = ft.Icons.EXPAND_MORE
             self.btn_expand_collapse.tooltip = i18n.get("expand_text_input", "展开")
@@ -515,9 +523,9 @@ class HomeView(ft.Container):
             else:
                 # 收缩时恢复固定高度
                 self.highlighted_text_overlay.expand = False
-                self.highlighted_text_overlay.height = self.ui_scale.px(140)
+                self.highlighted_text_overlay.height = self._collapsed_text_height
                 self.highlighted_text_column.expand = False
-                overlay_content_height = self.ui_scale.px(140 - 24)
+                overlay_content_height = self._collapsed_text_height - self.ui_scale.px(24)
                 self.highlighted_text_column.height = overlay_content_height
             
             # 强制重新应用当前高亮状态，避免展开后高亮丢失
