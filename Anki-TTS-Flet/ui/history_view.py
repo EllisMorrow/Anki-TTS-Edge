@@ -12,7 +12,7 @@ class HistoryView(ft.Container):
         px = self.ui_scale.px
         font = self.ui_scale.font
         self.expand = True
-        self.padding = px(20)
+        self.padding = px(18)
 
         self.header_text = ft.Text(i18n.get("history_panel_title"), size=font(24), weight="bold")
         self.clear_all_button = ft.TextButton(
@@ -33,7 +33,8 @@ class HistoryView(ft.Container):
                 self.header_text,
                 self.clear_all_button,
             ],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
         
         # Dialog
@@ -60,14 +61,14 @@ class HistoryView(ft.Container):
         )
 
         # List
-        self.history_list = ft.ListView(expand=True, spacing=px(10))
+        self.history_list = ft.ListView(expand=True, spacing=px(8))
         
         self.content = ft.Column(
             expand=True,
             alignment=ft.MainAxisAlignment.START,
             controls=[
                 self.header,
-                ft.Divider(height=px(16)),
+                ft.Divider(height=px(12)),
                 self.history_list
             ]
         )
@@ -86,7 +87,28 @@ class HistoryView(ft.Container):
         self.history_list.controls.clear()
         
         if not records:
-            self.history_list.controls.append(ft.Text(i18n.get("history_empty"), italic=True, size=self.ui_scale.font(14)))
+            self.history_list.controls.append(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Icon(
+                                ft.Icons.HISTORY,
+                                size=self.ui_scale.px(32),
+                                color=ft.Colors.OUTLINE,
+                            ),
+                            ft.Text(
+                                i18n.get("history_empty"),
+                                size=self.ui_scale.font(14),
+                                color=ft.Colors.OUTLINE,
+                            ),
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=self.ui_scale.px(8),
+                    ),
+                    alignment=ft.alignment.center,
+                    padding=self.ui_scale.px(40),
+                )
+            )
             self._safe_update()
             return
 
@@ -95,7 +117,8 @@ class HistoryView(ft.Container):
             # Flet's Dismissible is great for mobile, but for desktop explicit button is better.
             
             text_preview = rec.get("text", "")
-            if len(text_preview) > 50: text_preview = text_preview[:50] + "..."
+            if len(text_preview) > 120:
+                text_preview = text_preview[:120] + "..."
             
             voice_text = get_display_voice_name(rec.get("voice") or rec.get("voice_key"))
             timestamp_text = self._format_timestamp(rec.get("timestamp") or rec.get("time"))
@@ -105,12 +128,14 @@ class HistoryView(ft.Container):
             action_buttons = ft.Row(
                 [
                     ft.TextButton(
-                        text=i18n.get("control_play_pause", "播放"),
+                        text=i18n.get("control_play_pause", "播放/暂停"),
                         icon=ft.Icons.PLAY_ARROW,
                         style=ft.ButtonStyle(
                             text_style=ft.TextStyle(size=self.ui_scale.font(14)),
                             icon_size=self.ui_scale.px(18),
-                            padding=ft.padding.symmetric(horizontal=self.ui_scale.px(12), vertical=self.ui_scale.px(8)),
+                            padding=ft.padding.symmetric(
+                                horizontal=self.ui_scale.px(10), vertical=self.ui_scale.px(8)
+                            ),
                         ),
                         on_click=lambda e, r=rec: self._play_audio(r),
                     ),
@@ -121,7 +146,9 @@ class HistoryView(ft.Container):
                             color=ft.Colors.RED_400,
                             text_style=ft.TextStyle(size=self.ui_scale.font(14)),
                             icon_size=self.ui_scale.px(18),
-                            padding=ft.padding.symmetric(horizontal=self.ui_scale.px(12), vertical=self.ui_scale.px(8)),
+                            padding=ft.padding.symmetric(
+                                horizontal=self.ui_scale.px(10), vertical=self.ui_scale.px(8)
+                            ),
                         ),
                         on_click=lambda e, r=rec: self._delete_item(r),
                     ),
@@ -136,8 +163,20 @@ class HistoryView(ft.Container):
                         ft.Icon(ft.Icons.AUDIO_FILE, color=ft.Colors.INDIGO, size=self.ui_scale.px(24)),
                         ft.Column(
                             [
-                                ft.Text(text_preview, weight="bold", size=self.ui_scale.font(14)),
-                                ft.Text(meta_text, size=self.ui_scale.font(12), color=ft.Colors.OUTLINE),
+                                ft.Text(
+                                    text_preview,
+                                    weight="bold",
+                                    size=self.ui_scale.font(14),
+                                    max_lines=2,
+                                    overflow=ft.TextOverflow.ELLIPSIS,
+                                ),
+                                ft.Text(
+                                    meta_text,
+                                    size=self.ui_scale.font(12),
+                                    color=ft.Colors.OUTLINE,
+                                    max_lines=1,
+                                    overflow=ft.TextOverflow.ELLIPSIS,
+                                ),
                             ],
                             expand=True,
                             spacing=self.ui_scale.px(2)
@@ -148,6 +187,7 @@ class HistoryView(ft.Container):
                 padding=self.ui_scale.px(10),
                 bgcolor="surfaceVariant",
                 border_radius=self.ui_scale.px(10),
+                border=ft.border.all(self.ui_scale.px(1), ft.Colors.OUTLINE_VARIANT),
             )
             self.history_list.controls.append(tile)
             

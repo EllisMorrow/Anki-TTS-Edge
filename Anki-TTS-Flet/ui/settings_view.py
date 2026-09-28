@@ -43,6 +43,7 @@ class SettingsView(ft.Container):
             label = ft.Text(
                 control.label,
                 size=font(14),
+                expand=True,
                 on_tap=lambda _, switch=control: self._toggle_switch_from_label(switch),
             )
             self._switch_label_texts[id(control)] = label
@@ -307,9 +308,9 @@ class SettingsView(ft.Container):
         self.tts_engine_label_text = ft.Text(i18n.get("tts_engine_label"), size=font(14))
         self.local_engine_status_label_text = ft.Text(i18n.get("local_engine_status_label"), size=font(14), color="grey")
         self.local_engine_source_label_text = ft.Text(i18n.get("local_engine_download_source_label"), size=font(14))
-        self.section_voice_mode_text = ft.Text(i18n.get("section_voice_mode"), weight="bold", size=font(16))
+        self.section_voice_mode_text = ft.Text(i18n.get("section_voice_mode"), weight="bold", size=font(14))
         self.section_selection_mode_text = ft.Text(i18n.get("section_selection_mode"), weight="bold", size=font(16))
-        self.section_copy_mode_text = ft.Text(i18n.get("section_copy_mode"), weight="bold", size=font(16))
+        self.section_copy_mode_text = ft.Text(i18n.get("section_copy_mode"), weight="bold", size=font(14))
         self.section_window_text = ft.Text(i18n.get("section_window"), weight="bold", size=font(16))
         self.window_size_label_text = ft.Text(i18n.get("window_size_label"), size=font(14), color="grey")
         self.section_storage_text = ft.Text(i18n.get("section_storage"), weight="bold", size=font(16))
@@ -361,105 +362,112 @@ class SettingsView(ft.Container):
             actions_alignment=ft.MainAxisAlignment.END,
         )
         
+        def setting_row(*controls):
+            return ft.Row(
+                list(controls),
+                spacing=px(10),
+                run_spacing=px(8),
+                wrap=True,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            )
+
+        def setting_group(title, *controls):
+            return ft.Container(
+                content=ft.Column(
+                    [title, *controls],
+                    spacing=px(6),
+                    tight=True,
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                ),
+                padding=px(14),
+                bgcolor=ft.Colors.SURFACE,
+                border=ft.border.all(px(1), ft.Colors.OUTLINE_VARIANT),
+                border_radius=px(12),
+            )
+
+        def group_divider():
+            return ft.Divider(height=px(12), color=ft.Colors.OUTLINE_VARIANT)
+
+        engine_status = ft.Container(
+            content=ft.Column(
+                [
+                    setting_row(
+                        self.local_engine_status_label_text,
+                        self.local_engine_status_value,
+                        self.local_engine_busy_ring,
+                    ),
+                    self.local_engine_path_text,
+                ],
+                spacing=px(4),
+                tight=True,
+            ),
+            padding=px(10),
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
+            border_radius=px(8),
+        )
+
         self.content = ft.Column(
             [
                 self.header,
-                ft.Divider(),
-                
-                self.section_appearance_text,
-                switch_slot(self.theme_switch),
-                ft.Row([
-                    self.language_label_text,
-                    self.language_dropdown
-                ], spacing=px(10), wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                ft.Row([
-                    self.ui_scale_label_text,
-                    self.ui_scale_input
-                ], spacing=px(10), wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                ft.Divider(height=px(10), color="transparent"),
-                
-                self.section_playback_text,
-                switch_slot(self.autoplay_switch),
-                ft.Divider(height=px(10), color="transparent"),
-
-                self.section_tts_engine_text,
-                ft.Row(
-                    [self.tts_engine_label_text, self.tts_engine_dropdown],
-                    spacing=px(10),
-                    wrap=True,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                setting_group(
+                    self.section_appearance_text,
+                    switch_slot(self.theme_switch),
+                    setting_row(self.language_label_text, self.language_dropdown),
+                    setting_row(self.ui_scale_label_text, self.ui_scale_input),
                 ),
-                ft.Row(
-                    [self.local_engine_status_label_text, self.local_engine_status_value, self.local_engine_busy_ring],
-                    spacing=px(10),
-                    wrap=True,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                setting_group(
+                    self.section_playback_text,
+                    switch_slot(self.autoplay_switch),
+                    group_divider(),
+                    self.section_voice_mode_text,
+                    switch_slot(self.dual_voice_mode_switch),
                 ),
-                self.local_engine_path_text,
-                switch_slot(self.local_engine_auto_fallback_switch),
-                ft.Row(
-                    [self.local_engine_source_label_text, self.local_engine_source_dropdown],
-                    spacing=px(10),
-                    wrap=True,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                setting_group(
+                    self.section_tts_engine_text,
+                    setting_row(self.tts_engine_label_text, self.tts_engine_dropdown),
+                    engine_status,
+                    switch_slot(self.local_engine_auto_fallback_switch),
+                    setting_row(self.local_engine_source_label_text, self.local_engine_source_dropdown),
+                    setting_row(
+                        self.local_engine_install_button,
+                        self.local_engine_healthcheck_button,
+                        self.local_engine_manual_button,
+                        self.local_engine_open_dir_button,
+                    ),
+                    self.local_engine_uninstall_button,
                 ),
-                ft.Row(
-                    [self.local_engine_install_button, self.local_engine_healthcheck_button],
-                    spacing=px(10),
-                    wrap=True,
+                setting_group(
+                    self.section_selection_mode_text,
+                    switch_slot(self.selection_switch),
+                    switch_slot(self.selection_dual_mode_switch),
+                    group_divider(),
+                    self.section_copy_mode_text,
+                    switch_slot(self.ctrl_c_switch),
+                    switch_slot(self.copy_file_switch),
                 ),
-                ft.Row(
-                    [self.local_engine_manual_button, self.local_engine_open_dir_button],
-                    spacing=px(10),
-                    wrap=True,
-                ),
-                self.local_engine_uninstall_button,
-                ft.Divider(height=px(10), color="transparent"),
-
-                self.section_voice_mode_text,
-                switch_slot(self.dual_voice_mode_switch),
-                ft.Divider(height=px(10), color="transparent"),
-
-                self.section_selection_mode_text,
-                switch_slot(self.selection_switch),
-                switch_slot(self.selection_dual_mode_switch),
-                ft.Divider(height=px(10), color="transparent"),
-
-                self.section_copy_mode_text,
-                switch_slot(self.ctrl_c_switch),
-                switch_slot(self.copy_file_switch),
-                ft.Divider(height=px(10), color="transparent"),
-                
-                self.section_window_text,
-                switch_slot(self.tray_switch),
-                self.window_size_label_text,
-                ft.Row(
-                    [
+                setting_group(
+                    self.section_window_text,
+                    switch_slot(self.tray_switch),
+                    self.window_size_label_text,
+                    setting_row(
                         self.window_width_input,
                         ft.Text("×", size=font(20)),
                         self.window_height_input,
-                        self.reset_size_button
-                    ],
-                    alignment=ft.MainAxisAlignment.START,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=px(10),
-                    wrap=True,
+                        self.reset_size_button,
+                    ),
                 ),
-                ft.Divider(height=px(10), color="transparent"),
-                
-                self.section_storage_text,
-                ft.Row([
-                    self.max_files_input,
-                    self.open_data_dir_button
-                ], spacing=px(10), wrap=True, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                
-                ft.Divider(),
-                self.section_maintenance_text,
-                self.check_updates_button,
-                self.version_text
+                setting_group(
+                    self.section_storage_text,
+                    setting_row(self.max_files_input, self.open_data_dir_button),
+                ),
+                setting_group(
+                    self.section_maintenance_text,
+                    setting_row(self.check_updates_button, self.version_text),
+                ),
             ],
             scroll=ft.ScrollMode.AUTO,
-            spacing=px(10),
+            spacing=px(12),
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
         )
 
     def _is_mounted(self):
