@@ -4,7 +4,11 @@ import shutil
 
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('Anki-TTS-Flet/assets', 'assets')]
+# Only ship maintained resources, never local caches or other ignored files.
+datas = [
+    (os.path.join('Anki-TTS-Flet', 'assets', filename), 'assets')
+    for filename in ('icon-master.png', 'icon.ico', 'kokoro_manifest.json', 'translations.json')
+]
 binaries = []
 hiddenimports = ['pystray', 'PIL', 'pygame', 'pynput', 'win32clipboard', 'win32con', 'flet', 'flet_desktop']
 tmp_ret = collect_all('edge_tts')
