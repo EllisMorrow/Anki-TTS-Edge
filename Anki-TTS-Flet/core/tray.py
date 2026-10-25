@@ -22,9 +22,9 @@ class TrayIconManager:
             print(f"DEBUG: Loading tray icon from {ICON_PATH}")
             if os.path.exists(ICON_PATH):
                 try:
-                    self.image = Image.open(ICON_PATH)
-                    # Convert to RGBA to ensure transparency works on Windows
-                    self.image = self.image.convert("RGBA")
+                    with Image.open(ICON_PATH) as image:
+                        # Keep decoded pixels after closing the icon file.
+                        self.image = image.convert("RGBA")
                 except Exception as load_err:
                     print(f"ERROR: PIL failed to open {ICON_PATH}: {load_err}")
                     raise load_err
