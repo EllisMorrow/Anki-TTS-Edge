@@ -1,5 +1,14 @@
 # 更新日志 / Changelog
 
+## v2.9.9 (2026-10-25)
+
+### 🔒 安全与兼容性 / Security and compatibility
+
+- **安全更新**：将 Pillow 从 12.3.0 升级至 13.0.0，以修复上游安全漏洞；源码运行最低要求提升至 Python 3.11。Flet 与 flet-desktop 继续固定为 0.28.3。
+  **Security update**: Upgraded Pillow from 12.3.0 to 13.0.0 to fix upstream security vulnerabilities; source runs now require Python 3.11 or newer. Flet and flet-desktop remain pinned to 0.28.3.
+- **托盘图标**：解码后及时关闭图标文件，并新增正常、缺失和损坏图标的回归检查。
+  **Tray icon**: Close the icon file after decoding and add regression checks for valid, missing, and damaged icons.
+
 ## v2.9.8 (2026-09-28)
 
 ### ✨ 界面优化 / Interface improvements

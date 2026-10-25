@@ -36,14 +36,14 @@
 ### 方式一：下载 Windows 版本（推荐）
 
 1. 打开 [Releases](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest)。
-2. 下载 `Anki-TTS-Edge-v2.9.8-windows-amd64.zip`。
+2. 下载 `Anki-TTS-Edge-v2.9.9-windows-amd64.zip`。
 3. 完整解压 ZIP，然后运行 `Anki-TTS-Edge.exe`。
 
-> 请保留解压后的完整文件夹，不要只单独移动 EXE。
+> 请保留解压后的完整文件夹，不要只单独移动 EXE。发布包已内置 Python 解释器，无需另行安装 Python。
 
 ### 方式二：从源码运行
 
-环境要求：Windows、Python 3.10 或更高版本。
+源码环境要求：Windows、Python 3.11 或更高版本。
 
 ```powershell
 git clone https://github.com/EllisMorrow/Anki-TTS-Edge.git
@@ -70,10 +70,10 @@ python -m venv .venv
 %APPDATA%/Anki-TTS-Edge/
 ```
 
-## v2.9.8 更新内容
+## v2.9.9 更新内容
 
-- 声音页减少多处过大的留白，输入框展开按钮移到下边缘中央。
-- 生成历史页改善记录层级和空状态；设置页按用途分组，并集中展示本地语音引擎状态与操作。
+- 将 Pillow 升级至 13.0.0，修复上游安全漏洞；源码运行最低要求提升至 Python 3.11。
+- Windows 发布包内置 Python 解释器，无需单独安装；Flet 与 flet-desktop 继续固定为 0.28.3，功能与用户数据保持兼容。
 
 完整记录见 [CHANGELOG.md](CHANGELOG.md)。
 

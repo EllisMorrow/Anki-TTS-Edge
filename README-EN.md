@@ -37,14 +37,14 @@ Supports Microsoft Edge online voices, Local Kokoro, dual voices, selection/copy
 ### Option 1: Download the Windows package (recommended)
 
 1. Open the [latest Release](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest).
-2. Download `Anki-TTS-Edge-v2.9.8-windows-amd64.zip`.
+2. Download `Anki-TTS-Edge-v2.9.9-windows-amd64.zip`.
 3. Extract the complete ZIP, then run `Anki-TTS-Edge.exe`.
 
-> Keep the extracted folder together. Do not move only the EXE.
+> Keep the extracted folder together. Do not move only the EXE. The package includes its Python interpreter, so no separate Python installation is needed.
 
 ### Option 2: Run from source
 
-Requirements: Windows and Python 3.10 or newer.
+Source requirements: Windows and Python 3.11 or newer.
 
 ```powershell
 git clone https://github.com/EllisMorrow/Anki-TTS-Edge.git
@@ -71,10 +71,10 @@ User settings, history, audio, and the optional offline engine are stored under:
 %APPDATA%/Anki-TTS-Edge/
 ```
 
-## What's New in v2.9.8
+## What's New in v2.9.9
 
-- The Voice page uses tighter spacing, with the text input's expand control centered at its lower edge.
-- History records and the empty state are clearer. Settings are grouped by purpose, with local-engine status beside its actions.
+- Upgraded Pillow to 13.0.0 to fix upstream security vulnerabilities; source runs now require Python 3.11 or newer.
+- The Windows release package includes Python. Flet and flet-desktop remain pinned to 0.28.3, with application features and user data preserved.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full history.
 
