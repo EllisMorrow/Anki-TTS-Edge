@@ -1,5 +1,12 @@
 # 更新日志 / Changelog
 
+## v2.9.10 (2026-11-02)
+
+- **在线语音兼容性**：将 edge-tts 从 7.2.8 升级至 7.3.1，支持 Sec-MS-GEC v2 令牌，并修复受系统语言影响的服务器日期解析。
+  **Online speech compatibility**: Upgrade edge-tts from 7.2.8 to 7.3.1 for Sec-MS-GEC v2 tokens and locale-independent server date parsing.
+- Windows 发布包内置新版依赖；Flet 与 flet-desktop 保持 0.28.3，无用户数据格式迁移。
+  The Windows package bundles the updated dependency. Flet and flet-desktop remain at 0.28.3; no user-data format migration.
+
 ## v2.9.9 (2026-10-25)
 
 ### 🔒 安全与兼容性 / Security and compatibility
