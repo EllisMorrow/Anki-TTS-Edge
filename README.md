@@ -53,6 +53,26 @@ python -m venv .venv
 .\.venv\Scripts\python.exe Anki-TTS-Flet\main.py
 ```
 
+## 常见问题
+
+### Windows 11 提示“智能应用控制已阻止可能不安全的文件”
+
+从 GitHub 下载并解压后，若 EXE 被 Windows 拦截，可以在确认文件来自本项目 [Releases](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest) 后，尝试移除该文件的互联网来源标记。已有用户反馈，解除标记后程序恢复正常运行。
+
+打开 Windows PowerShell，执行以下命令，将示例路径替换为 EXE 的实际完整路径，然后重新运行程序：
+
+```powershell
+Unblock-File -LiteralPath "C:\Apps\Anki-TTS-Edge\Anki-TTS-Edge.exe"
+```
+
+也可右键 EXE →“属性”→“常规”，若显示“解除锁定”，勾选后点击“应用”。重新下载的文件可能再次带有来源标记。
+
+`Unblock-File` 仅移除 `Zone.Identifier` 来源标记，不需要关闭 Microsoft Defender 或智能应用控制，也不代表文件经过安全认证。拦截提示本身不能证明文件含有病毒，解除标记后能运行也不能证明文件安全。
+
+此方法适用于与来源标记有关的情况，不能保证解决所有智能应用控制、签名或组织策略拦截。若仍被阻止，请记录完整提示及被拦截的文件名并反馈，避免反复解锁或关闭防护。
+
+参考：[Microsoft：Unblock-File](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/unblock-file?view=powershell-5.1)、[智能应用控制常见问题](https://support.microsoft.com/en-us/windows/security/threat-malware-protection/smart-app-control-frequently-asked-questions)。
+
 ## 使用方法
 
 1. **选择引擎**：默认使用在线 Edge TTS；需要离线语音时，可在设置中切换到本地 Kokoro。

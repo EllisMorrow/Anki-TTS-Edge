@@ -54,6 +54,26 @@ python -m venv .venv
 .\.venv\Scripts\python.exe Anki-TTS-Flet\main.py
 ```
 
+## Troubleshooting
+
+### Windows 11: “Smart App Control blocked an app that may be unsafe”
+
+If Windows blocks the EXE after downloading and extracting it from GitHub, first confirm that the file came from this project's [Releases](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest), then try removing its internet origin mark. A user reported that the application ran normally after this step.
+
+Open Windows PowerShell, replace the example path with the EXE's actual full path, run the command below, then launch the application again:
+
+```powershell
+Unblock-File -LiteralPath "C:\Apps\Anki-TTS-Edge\Anki-TTS-Edge.exe"
+```
+
+Alternatively, right-click the EXE → Properties → General. If an Unblock checkbox appears, select it and click Apply. A newly downloaded copy may carry the origin mark again.
+
+`Unblock-File` only removes the `Zone.Identifier` origin mark. It does not require turning off Microsoft Defender or Smart App Control, and it does not certify the file as safe. A block alone does not prove malware is present; successful execution after unblocking does not prove safety either.
+
+This method may help with origin-mark-related blocks; it is not a guaranteed solution for all Smart App Control, signature, or organization policy restrictions. If the block persists, report the full warning and the blocked filename rather than repeatedly unblocking files or disabling protection.
+
+References: [Microsoft: Unblock-File](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/unblock-file?view=powershell-5.1), [Smart App Control FAQ](https://support.microsoft.com/en-us/windows/security/threat-malware-protection/smart-app-control-frequently-asked-questions).
+
 ## How to Use
 
 1. **Choose an engine**: Edge TTS is the default. Switch to Local Kokoro in Settings when offline synthesis is needed.
