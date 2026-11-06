@@ -9,6 +9,8 @@ from unittest import mock
 
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "Anki-TTS-Flet"
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
 SETTINGS_MODULE_PATH = APP_ROOT / "config" / "settings.py"
 VOICES_MODULE_PATH = APP_ROOT / "core" / "voices.py"
 EDGE_A = "Microsoft Server Speech Text to Speech Voice (zh-CN, XiaoxiaoNeural)"
@@ -101,9 +103,10 @@ class VoiceFetchTests(unittest.IsolatedAsyncioTestCase):
         voice_db.load_voice_cache = mock.Mock(return_value=[])
         spec = importlib.util.spec_from_file_location("voices_under_test", VOICES_MODULE_PATH)
         module = importlib.util.module_from_spec(spec)
-        with mock.patch.dict(sys.modules, {"edge_tts": edge_tts, "utils.i18n": i18n_module,
-                                      "core.voice_db": voice_db}):
-            spec.loader.exec_module(module)
+        # The dependency now loads on the async request rather than module import.
+        self.enterContext(mock.patch.dict(sys.modules, {"edge_tts": edge_tts, "utils.i18n": i18n_module,
+                                                       "core.voice_db": voice_db}))
+        spec.loader.exec_module(module)
         self.assertEqual(await module.fetch_voices_from_network(), [])
         voice_db.save_voice_cache.assert_not_called()
         voice_manager.find.return_value = []

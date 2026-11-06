@@ -9,6 +9,7 @@ import time
 from config.constants import CUSTOM_WINDOW_TITLE, ICON_PATH, APP_VERSION, DEFAULT_VOICE
 from ui.home_view import HomeView, MAX_HIGHLIGHT_WORDS
 from core.voices import get_cached_voices, fetch_voices_from_network
+from core.edge_runtime import load_edge_tts
 from core.kokoro_voice_catalog import build_kokoro_v1_1_voice_catalog
 from ui.history_view import HistoryView
 from ui.settings_view import SettingsView
@@ -425,26 +426,42 @@ async def main(page: ft.Page):
         await maybe_await(page.window.to_front())
         page.update()
 
-    async def destroy_main_window():
-        if monitor_manager:
-            monitor_manager.stop_monitors()
-        if tray_manager:
-            tray_manager.stop()
+    shutdown_started = False
 
-        # If offline Kokoro is generating, ensure the child process is killed so the app can exit promptly.
+    async def destroy_main_window():
+        nonlocal shutdown_started
+        if shutdown_started:
+            return
+        shutdown_started = True
         try:
-            mgr = tts_manager
-        except Exception:
-            mgr = None
-        try:
-            if mgr:
-                provider = mgr.get_provider("local_kokoro")
-                cancel = getattr(provider, "cancel_active", None)
-                if cancel:
-                    await cancel(reason="shutdown")
-        except Exception as ex:
-            print(f"DEBUG: cancel local engine failed: {ex}")
-        await maybe_await(page.window.destroy())
+            if monitor_manager:
+                monitor_manager.stop_monitors()
+            if tray_manager:
+                tray_manager.stop()
+
+            # Cancel an active offline synthesis before closing its parent window.
+            try:
+                mgr = tts_manager
+            except Exception:
+                mgr = None
+            try:
+                if mgr:
+                    provider = mgr.get_provider("local_kokoro")
+                    cancel = getattr(provider, "cancel_active", None)
+                    if cancel:
+                        await cancel(reason="shutdown")
+            except Exception as ex:
+                print(f"DEBUG: cancel local engine failed: {ex}")
+            if os.name == "nt":
+                # Flet #6428: the Windows destroy path stalls with prevent_close.
+                # close() sends both changes together; ignore its echoed close event.
+                page.window.prevent_close = False
+                await maybe_await(page.window.close())
+            else:
+                await maybe_await(page.window.destroy())
+        except BaseException:
+            shutdown_started = False
+            raise
     
     # Restart cleanup handler - stop tray and monitors before restart
     def handle_app_restart():
@@ -557,6 +574,13 @@ async def main(page: ft.Page):
         show_message(i18n.get("voice_selection_unavailable"))
         return True
 
+    async def warm_online_runtime():
+        try:
+            await load_edge_tts()
+        except Exception as ex:
+            # Optional preloading must not hide errors from a later real request.
+            logging.warning("Online speech dependency preload failed: %s", ex)
+
     # Background refresh: check network for updates
     async def background_voice_refresh():
         try:
@@ -621,6 +645,8 @@ async def main(page: ft.Page):
             home_view.focus_selected_voices()
 
             if edge_voice_state["loaded_from_cache"]:
+                # Warm imports off the UI thread once cached voices are visible.
+                asyncio.create_task(warm_online_runtime())
                 asyncio.create_task(background_voice_refresh())
         except Exception as e:
             home_view.set_status(f"加载语音失败: {e}", ft.Icons.ERROR_OUTLINE, ft.Colors.RED_100)
@@ -1848,6 +1874,8 @@ async def main(page: ft.Page):
     page.window.prevent_close = True # Handle close manually
 
     def window_event(e):
+        if e.data == "close" and shutdown_started:
+            return
         if e.data == "close":
             if settings_manager.get("minimize_to_tray", False):
                 print("DEBUG: Window Close -> Hiding to Tray")

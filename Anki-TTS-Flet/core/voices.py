@@ -1,6 +1,6 @@
 import re
 import asyncio
-from edge_tts import VoicesManager
+from core.edge_runtime import load_edge_tts
 from utils.i18n import i18n
 from core.voice_db import save_voice_cache, load_voice_cache
 
@@ -15,7 +15,8 @@ def get_cached_voices():
 async def fetch_voices_from_network():
     """Fetch a complete, valid voice catalog and update the cache."""
     try:
-        voices = await VoicesManager.create()
+        edge_tts = await load_edge_tts()
+        voices = await edge_tts.VoicesManager.create()
         raw_list = voices.find()
 
         if not isinstance(raw_list, list) or not raw_list:

@@ -36,7 +36,7 @@
 ### 方式一：下载 Windows 版本（推荐）
 
 1. 打开 [Releases](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest)。
-2. 下载 `Anki-TTS-Edge-v2.9.10-windows-amd64.zip`。
+2. 下载 `Anki-TTS-Edge-v2.9.11-windows-amd64.zip`。
 3. 完整解压 ZIP，然后运行 `Anki-TTS-Edge.exe`。
 
 > 请保留解压后的完整文件夹，不要只单独移动 EXE。发布包已内置 Python 解释器，无需另行安装 Python。
@@ -90,10 +90,10 @@ Unblock-File -LiteralPath "C:\Apps\Anki-TTS-Edge\Anki-TTS-Edge.exe"
 %APPDATA%/Anki-TTS-Edge/
 ```
 
-## v2.9.10 更新内容
+## v2.9.11 更新内容
 
-- 将 edge-tts 从 7.2.8 升级至 7.3.1，支持新版服务令牌，并修复受系统语言影响的服务器日期解析。
-- Windows 发布包内置更新后的依赖；Flet 与 flet-desktop 继续固定为 0.28.3。
+- 修复 Windows 真正退出时等待数秒的问题，保留关闭到托盘和退出清理流程。
+- 界面与缓存音色先显示，在线语音依赖在后台线程加载；不升级框架或改变用户数据格式。
 
 完整记录见 [CHANGELOG.md](CHANGELOG.md)。
 

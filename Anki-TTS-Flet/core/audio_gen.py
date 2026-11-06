@@ -3,7 +3,7 @@ import re
 import asyncio
 import json
 import hashlib
-import edge_tts
+from core.edge_runtime import load_edge_tts
 from config.constants import AUDIO_DIR
 from utils.text import sanitize_text
 from utils.i18n import i18n
@@ -42,6 +42,7 @@ async def generate_audio_with_timestamps_async(text, voice, rate, volume, pitch,
     Returns (output_path, timestamps_data) or (None, None) on error.
     """
     try:
+        edge_tts = await load_edge_tts()
         # boundary='WordBoundary' required since edge-tts 7.x changed default to SentenceBoundary
         comm = edge_tts.Communicate(text, voice, rate=rate, volume=volume, pitch=pitch, boundary="WordBoundary")
         

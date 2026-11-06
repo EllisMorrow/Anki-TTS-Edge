@@ -37,7 +37,7 @@ Supports Microsoft Edge online voices, Local Kokoro, dual voices, selection/copy
 ### Option 1: Download the Windows package (recommended)
 
 1. Open the [latest Release](https://github.com/EllisMorrow/Anki-TTS-Edge/releases/latest).
-2. Download `Anki-TTS-Edge-v2.9.10-windows-amd64.zip`.
+2. Download `Anki-TTS-Edge-v2.9.11-windows-amd64.zip`.
 3. Extract the complete ZIP, then run `Anki-TTS-Edge.exe`.
 
 > Keep the extracted folder together. Do not move only the EXE. The package includes its Python interpreter, so no separate Python installation is needed.
@@ -91,10 +91,10 @@ User settings, history, audio, and the optional offline engine are stored under:
 %APPDATA%/Anki-TTS-Edge/
 ```
 
-## What's New in v2.9.10
+## What's New in v2.9.11
 
-- Upgraded edge-tts from 7.2.8 to 7.3.1 for v2 service tokens and locale-independent server date parsing.
-- The Windows package bundles the updated dependency; Flet and flet-desktop remain pinned to 0.28.3.
+- Fix the multi-second Windows exit delay while preserving close-to-tray behavior and shutdown cleanup.
+- Show the interface and cached voices before loading online speech dependencies in a background thread; no framework upgrade or user-data format change.
 
 See [CHANGELOG.md](CHANGELOG.md) for the full history.
 

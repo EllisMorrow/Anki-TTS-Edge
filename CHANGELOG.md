@@ -1,5 +1,14 @@
 # 更新日志 / Changelog
 
+## v2.9.11 (2026-11-06)
+
+- **Windows 退出**：完成现有清理后解除关闭拦截并正常关闭窗口，避开 Flet 0.28.3 的销毁等待；防止重复关闭事件再次执行清理，保留关闭到托盘行为。
+  **Windows shutdown**: After existing cleanup, disable close interception and close normally to avoid the Flet 0.28.3 destroy delay. Guard against reentrant shutdown while preserving close-to-tray behavior.
+- **启动**：界面和缓存音色不再等待在线语音依赖导入；后台线程预加载依赖，首次请求按需等待，避免在界面线程中执行该导入。
+  **Startup**: Render the interface and cached voices before importing online speech dependencies. Preload in a worker thread; requests await loading as needed without importing on the UI thread.
+- 增加启动导入、异步加载、生成参数/音频/时间戳和退出清理回归检查；依赖版本及用户数据格式不变。
+  Add regression checks for startup imports, async loading, synthesis parameters/audio/timestamps, and shutdown cleanup. Dependency versions and user-data formats remain unchanged.
+
 ## v2.9.10 (2026-11-02)
 
 - **在线语音兼容性**：将 edge-tts 从 7.2.8 升级至 7.3.1，支持 Sec-MS-GEC v2 令牌，并修复受系统语言影响的服务器日期解析。
